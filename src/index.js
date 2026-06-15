@@ -92,7 +92,7 @@ async function processJob(job) {
         resolve();
       });
     } else {
-      const text = await response.body.text();
+      const text = await new Response(response.body).text();
 
       let responseBody = null;
       try {
