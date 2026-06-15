@@ -1,10 +1,15 @@
 {
   "type": "module",
   "scripts": {
-    "start": "node proxy.mjs"
+    "start": "node proxy.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "fastify": "^5.8.5",
     "js-tiktoken": "^1.0.21"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9"
   }
 }

@@ -63,61 +63,51 @@ The proxy reads the API key from OpenCode's auth file. The entry must match the 
 
 Four layers prevent rate limit violations:
 
-1. **Rolling window (dispatch-based)** -- Tracks when requests leave the proxy (not when they complete). `MAX_RPM` requests per 60-second window. More accurate against NIM's rate limiting.
+1. **Rolling window (dispatch-based)** -- Tracks when requests leave the proxy (not when they complete). `MAX_RPM` requests per 60-second window.
 
-2. **Concurrency cap** -- Max `MAX_CONCURRENCY` in-flight upstream requests. Prevents parallel calls from consuming multiple window slots simultaneously.
+2. **Concurrency cap** -- Max `MAX_CONCURRENCY` in-flight upstream requests.
 
-3. **Dispatch gap** -- Minimum `MIN_DISPATCH_GAP_MS` between dispatches (~2.4s at 25 RPM). Smooths traffic to avoid burst patterns that trigger NIM's secondary limiters.
+3. **Dispatch gap** -- Minimum `MIN_DISPATCH_GAP_MS` between dispatches (~2.4s at 25 RPM).
 
-4. **429 retry + cooldown + adaptive limiting** -- On HTTP 429, retries up to `MAX_RETRIES` times with exponential backoff (`RETRY_DELAYS`). If all retries fail, halts requests for `COOLDOWN_MINUTES` and permanently decrements the rate limit by 1 (floor of 5). This persists across restarts via `nim-throttle-state.json`.
+4. **429 retry + cooldown + adaptive limiting** -- Retries up to `MAX_RETRIES` with exponential backoff. If all fail, halts for `COOLDOWN_MINUTES` and decrements the rate limit by 1 (floor of 5).
 
 ## Token Usage Tracking
 
 Every request's token usage is intercepted and logged:
 
 - **Non-SSE responses**: extracts NIM's `usage` field directly. Falls back to `js-tiktoken` estimation.
-- **SSE streaming**: transparent `SSETapStream` parses events in-flight without buffering. Data flows to client in real-time.
+- **SSE streaming**: transparent `SSETapStream` parses events in-flight without buffering.
 - **Estimation**: uses `js-tiktoken` with `cl100k_base` encoding when NIM doesn't provide usage data.
 
-Usage is persisted in `nim-throttle-state.json` and logged at `info` level. Fields: `model`, `promptTokens`, `completionTokens`, `totalTokens`, `source` (`nim` or `estimated`).
-
-## SSE Streaming
-
-Streaming responses (`text/event-stream`) are piped through a transparent tap stream that intercepts SSE events for token counting. The tap writes every chunk to the client immediately — no buffering, no added latency. The proxy strips `content-encoding` and `content-length` headers since it rewrites the response body.
+Usage is persisted in `nim-throttle-state.json` and logged at `info` level.
 
 ## Model Injection
 
-Requests to `z-ai/glm-5.1` and `minimaxai/minimax-m3` are automatically patched with `chat_template_kwargs: { enable_thinking: true }`, enabling thinking mode via NVIDIA NIM.
+Config-driven via `thinkingModels` array in `src/config.js`. Add new models by adding a rule:
 
-## OpenCode Integration
-
-Add to `~/.config/opencode/opencode.json`:
-
-```json
-{
-  "provider": {
-    "nvidia-throttle": {
-      "name": "Nvidia (proxy)",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://127.0.0.1:4000/v1/"
-      },
-      "models": {
-        "z-ai/glm-5.1": {
-          "name": "GLM 5.1"
-        },
-        "minimaxai/minimax-m3": {
-          "name": "MiniMax M3"
-        }
-      }
-    }
-  }
-}
+```js
+thinkingModels: [
+  {
+    pattern: /^z-ai\/glm-?5\.?1/i,
+    injection: { chat_template_kwargs: { enable_thinking: true } },
+  },
+  {
+    pattern: /^minimaxai\/minimax-m3$/i,
+    injection: { chat_template_kwargs: { enable_thinking: true } },
+  },
+],
 ```
 
 ## Architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design documentation.
+
+## Testing
+
+```bash
+yarn test        # run all tests
+yarn test:watch  # watch mode
+```
 
 ## License
 

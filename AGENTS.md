@@ -9,11 +9,17 @@ node proxy.mjs        # default port 4000
 PORT=8765 node proxy.mjs  # custom port
 ```
 
-No build step. Single-file Node app (`proxy.mjs`). Requires `fastify` and `js-tiktoken` in `node_modules`.
+No build step. Single-file entry (`proxy.mjs` → `src/index.js`). Requires `fastify` and `js-tiktoken` in `node_modules`.
 
 ## Key Files
 
-- `proxy.mjs` — entire app: Fastify server, queue, scheduler, auth, model injection, token tracking
+- `proxy.mjs` — thin entry wrapper, imports `src/index.js`
+- `src/index.js` — composition root: wires all dependencies
+- `src/config.js` — frozen config object from env vars
+- `src/domain/` — pure business logic (rate-limiter, token-tracker, model-injector, scheduler)
+- `src/infrastructure/` — external concerns (state-store, auth-loader, nim-client, tokenizer)
+- `src/presentation/` — Fastify-specific (routes, sse-tap, server)
+- `tests/` — vitest test stubs for domain and infrastructure
 - `ARCHITECTURE.md` — detailed design doc (throttling layers, request flow)
 - `nim-throttle-state.json` — persistent throttle state (auto-created, gitignored)
 - OpenCode config: `~/.config/opencode/opencode.json` — provider `nvidia-throttle` points here
@@ -22,7 +28,7 @@ No build step. Single-file Node app (`proxy.mjs`). Requires `fastify` and `js-ti
 
 - **Fastify v5**: `reply.sent` is read-only. Proxy uses `reply.hijack()` + `reply.raw.writeHead()` / `.pipe()` to bypass Fastify reply lifecycle. Don't try to set `reply.sent` directly.
 - **Auth file**: reads API key from `~/.local/share/opencode/auth.json` under provider key matching `PROVIDER` env var (default `nvidia`). The auth entry must have `type: "api"` and a `key` field.
-- **Model injection**: `z-ai/glm-5.1` and `minimaxai/minimax-m3` get `chat_template_kwargs: { enable_thinking: true }` injected automatically by `patchBody()`.
+- **Model injection**: config-driven via `thinkingModels` array in `src/config.js`. Add new models by adding a rule — zero code changes.
 - **429 handling**: retries up to 3 times with 20s/40s/60s backoff, then enters 60-min cooldown with adaptive limit decrement (floor of 5). All configurable via env vars.
 - **Dispatch-based tracking**: rolling window tracks dispatch timestamps (not completion). More accurate against NIM's rate limiting.
 - **Dispatch gap**: minimum 2.4s between dispatches at 25 RPM. Prevents startup bursts.
@@ -36,4 +42,4 @@ Provider config in `opencode.json` uses `@ai-sdk/openai-compatible` with `baseUR
 
 ## Documentation
 
-When changing behavior, constants, or architecture in `proxy.mjs`, update `AGENTS.md`, `ARCHITECTURE.md`, and `README.md` to match. These files are the source of truth for how the proxy works.
+When changing behavior, constants, or architecture in `src/`, update `AGENTS.md`, `ARCHITECTURE.md`, and `README.md` to match. These files are the source of truth for how the proxy works.
