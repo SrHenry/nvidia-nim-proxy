@@ -111,4 +111,4 @@ yarn test:watch  # watch mode
 
 ## License
 
-Private. Not licensed for redistribution.
+[MIT](LICENSE)
