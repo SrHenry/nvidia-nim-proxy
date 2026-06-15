@@ -64,6 +64,9 @@ export class BufferedRepository {
     this.flushTimer = null;
   }
 
+  // Direct pass-through for bulk operations (bypasses buffer)
+  insertBatch(...args) { return this.inner.insertBatch(...args); }
+
   findByModel(...args) { return this.inner.findByModel(...args); }
   getTokenUsageByModel(...args) { return this.inner.getTokenUsageByModel(...args); }
   getSummary(...args) { return this.inner.getSummary(...args); }

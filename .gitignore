@@ -3,3 +3,7 @@ node_modules/
 .env.*
 *.log
 nim-throttle-state.json
+nim-throttle-state.json.migrated
+oc-proxy.db
+oc-proxy.db-wal
+oc-proxy.db-shm
