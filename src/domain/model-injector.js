@@ -17,5 +17,15 @@ export function createModelInjector(config) {
     return body;
   }
 
-  return { patch };
+  function getMatchedRule(model) {
+    if (!model || typeof model !== "string") return null;
+    for (const rule of config.thinkingModels) {
+      if (rule.pattern.test(model)) {
+        return rule.pattern.source;
+      }
+    }
+    return null;
+  }
+
+  return { patch, getMatchedRule };
 }
