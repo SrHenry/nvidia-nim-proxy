@@ -32,3 +32,7 @@ No build step. Single-file Node app (`proxy.mjs`). Requires `fastify` in `node_m
 ## OpenCode Integration
 
 Provider config in `opencode.json` uses `@ai-sdk/openai-compatible` with `baseURL: "http://127.0.0.1:8765/v1/"`. Uses `http://` not `https://` — proxy serves plain HTTP.
+
+## Documentation
+
+When changing behavior, constants, or architecture in `proxy.mjs`, update `AGENTS.md`, `ARCHITECTURE.md`, and `README.md` to match. These files are the source of truth for how the proxy works.
