@@ -120,11 +120,11 @@ describe('RequestsRepository', () => {
     const usage = repo.getTokenUsageByModel({ from: now - 1500, to: now + 1000 });
     expect(usage.length).toBe(2);
     const modelA = usage.find(u => u.model === 'a');
-    expect(modelA.total_tokens).toBe(20n);
-    expect(modelA.request_count).toBe(1n);
+    expect(modelA.totalTokens).toBe(20);
+    expect(modelA.requestCount).toBe(1);
 
     const modelB = usage.find(u => u.model === 'b');
-    expect(modelB.total_tokens).toBe(300n);
+    expect(modelB.totalTokens).toBe(300);
   });
 
   it('gets summary', () => {
@@ -134,10 +134,10 @@ describe('RequestsRepository', () => {
     repo.insert({ model: 'b', statusCode: 500n, latencyMs: 3000n, error: 'timeout', promptTokens: 0n, completionTokens: 0n, totalTokens: 0n, tokenSource: 'estimated', createdAt: now });
 
     const summary = repo.getSummary({ from: now - 2000, to: now + 1000 });
-    expect(summary.total_requests).toBe(3);
-    expect(summary.total_tokens).toBe(50);
-    expect(summary.avg_latency_ms).toBeCloseTo(1100, 0);
-    expect(summary.error_count).toBe(1);
+    expect(summary.totalRequests).toBe(3);
+    expect(summary.totalTokens).toBe(50);
+    expect(summary.avgLatencyMs).toBeCloseTo(1100, 0);
+    expect(summary.errorCount).toBe(1);
   });
 
   it('prunes records older than timestamp', () => {

@@ -104,7 +104,12 @@ export class RequestsRepository {
     if (to) { query += ' AND created_at <= ?'; params.push(to); }
     query += ' GROUP BY model ORDER BY total_tokens DESC';
 
-    return this.db.connection.prepare(query).all(...params);
+    const rows = this.db.connection.prepare(query).all(...params);
+    return rows.map((r) => ({
+      model: r.model,
+      totalTokens: Number(r.total_tokens),
+      requestCount: Number(r.request_count),
+    }));
   }
 
   getSummary({ from, to } = {}) {
@@ -122,10 +127,10 @@ export class RequestsRepository {
 
     const row = this.db.connection.prepare(query).get(...params);
     return {
-      total_requests: Number(row.total_requests),
-      total_tokens: Number(row.total_tokens),
-      avg_latency_ms: Number(row.avg_latency_ms),
-      error_count: Number(row.error_count),
+      totalRequests: Number(row.total_requests),
+      totalTokens: Number(row.total_tokens),
+      avgLatencyMs: Number(row.avg_latency_ms),
+      errorCount: Number(row.error_count),
     };
   }
 
