@@ -17,11 +17,11 @@ No build step. Single-file entry (`proxy.mjs` → `src/index.js`). Requires `fas
 - `src/index.js` — composition root: wires all dependencies
 - `src/config.js` — frozen config object from env vars
 - `src/domain/` — pure business logic (rate-limiter, token-tracker, model-injector, scheduler)
-- `src/infrastructure/` — external concerns (state-store, auth-loader, nim-client, tokenizer)
+- `src/infrastructure/` — external concerns (database, auth-loader, nim-client, tokenizer)
 - `src/presentation/` — Fastify-specific (routes, sse-tap, server)
 - `tests/` — vitest test stubs for domain and infrastructure
 - `ARCHITECTURE.md` — detailed design doc (throttling layers, request flow)
-- `nim-throttle-state.json` — persistent throttle state (auto-created, gitignored)
+- `oc-proxy.db` — SQLite database for persistent state (auto-created, gitignored)
 - OpenCode config: `~/.config/opencode/opencode.json` — provider `nvidia-throttle` points here
 
 ## Gotchas
@@ -35,6 +35,8 @@ No build step. Single-file entry (`proxy.mjs` → `src/index.js`). Requires `fas
 - **Token tracking**: every request's token usage is logged and persisted. Uses NIM's `usage` field when available, falls back to `js-tiktoken` estimation.
 - **SSE streaming**: transparent tap stream intercepts SSE for token counting without buffering. Data flows to client in real-time.
 - **Content-Encoding**: proxy strips `content-encoding` and `content-length` headers since it re-writes the response body.
+- **SQLite persistence**: uses `better-sqlite3` with WAL mode. Snowflake IDs (64-bit BigInt) for requests and throttle_events. Repository pattern with write-behind buffer for high-frequency inserts. `defaultSafeIntegers(true)` means all INTEGER columns return as BigInt — repositories convert to Number where needed.
+- **Legacy migration**: on first startup, `nim-throttle-state.json` is auto-migrated to SQLite and renamed to `.migrated`.
 
 ## OpenCode Integration
 

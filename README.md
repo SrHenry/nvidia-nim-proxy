@@ -4,7 +4,7 @@ A reverse proxy that serializes and throttles OpenCode requests to the NVIDIA NI
 
 ## Overview
 
-OpenCode's default behavior fires concurrent requests that quickly exceed NVIDIA NIM's rate limit. oc-proxy sits between the two, queuing requests through a rolling-window rate limiter, concurrency cap, dispatch gap smoothing, and 429 retry logic. Token usage is tracked for TPM inference. State persists across restarts.
+OpenCode's default behavior fires concurrent requests that quickly exceed NVIDIA NIM's rate limit. oc-proxy sits between the two, queuing requests through a rolling-window rate limiter, concurrency cap, dispatch gap smoothing, and 429 retry logic. Token usage is tracked for TPM inference. State persists in SQLite across restarts.
 
 ```
 OpenCode ──▶ oc-proxy (localhost) ──▶ NVIDIA NIM (integrate.api.nvidia.com/v1)
@@ -14,6 +14,7 @@ OpenCode ──▶ oc-proxy (localhost) ──▶ NVIDIA NIM (integrate.api.nvid
 
 - Node.js >= 18
 - An NVIDIA NIM API key stored in OpenCode's auth file (`~/.local/share/opencode/auth.json`)
+- System build tools for `better-sqlite3` native addon (Python, C++ compiler)
 
 ## Installation
 
@@ -38,7 +39,11 @@ All configuration is via environment variables:
 | `UPSTREAM` | `https://integrate.api.nvidia.com/v1` | Upstream API base URL |
 | `PROVIDER` | `nvidia` | Key name in auth.json |
 | `AUTH_FILE` | `~/.local/share/opencode/auth.json` | Path to auth credentials |
-| `STATE_FILE` | `./nim-throttle-state.json` | Persistent throttle state |
+| `DB_PATH` | `./oc-proxy.db` | SQLite database file path |
+| `DB_RETENTION_DAYS` | `365` | Days to retain request/event history |
+| `SNOWFLAKE_WORKER_ID` | `0` | Unique worker ID (0-1023) for Snowflake IDs |
+| `FLUSH_INTERVAL_MS` | `5000` | Write-behind buffer flush interval |
+| `FLUSH_BATCH_SIZE` | `100` | Write-behind buffer batch size trigger |
 | `MAX_RPM` | `25` | Target requests per minute (NIM publishes 40, we stay conservative) |
 | `COOLDOWN_MINUTES` | `60` | Minutes to wait after exhausted 429 retries |
 | `MAX_CONCURRENCY` | `2` | Max in-flight upstream requests |
@@ -79,7 +84,7 @@ Every request's token usage is intercepted and logged:
 - **SSE streaming**: transparent `SSETapStream` parses events in-flight without buffering.
 - **Estimation**: uses `js-tiktoken` with `cl100k_base` encoding when NIM doesn't provide usage data.
 
-Usage is persisted in `nim-throttle-state.json` and logged at `info` level.
+Usage is persisted in SQLite (`requests` table) via write-behind buffer and logged at `info` level.
 
 ## Model Injection
 

@@ -15,7 +15,13 @@ src/
 │   ├── model-injector.js    # Config-driven model rules array
 │   └── scheduler.js         # Job queue, concurrency, dispatch gap
 ├── infrastructure/
-│   ├── state-store.js       # Atomic JSON read/write
+│   ├── database/
+│   │   ├── connection.js    # SQLite (better-sqlite3) with WAL + migrations
+│   │   ├── snowflake.js     # 64-bit BigInt ID generator
+│   │   ├── requests-repository.js  # Request CRUD + aggregations
+│   │   ├── throttle-repository.js  # State singleton + events log
+│   │   ├── buffered-repository.js  # Write-behind buffer decorator
+│   │   └── legacy-migration.js     # nim-throttle-state.json → SQLite
 │   ├── auth-loader.js       # Cached auth.json reader
 │   ├── nim-client.js        # HTTP fetch with retry
 │   └── tokenizer.js         # js-tiktoken wrapper
@@ -31,7 +37,12 @@ src/
 index.js (composition root)
   ├── config.js
   ├── infrastructure/tokenizer.js
-  ├── infrastructure/state-store.js ← config
+  ├── infrastructure/database/connection.js ← config
+  ├── infrastructure/database/snowflake.js
+  ├── infrastructure/database/requests-repository.js ← connection, snowflake
+  ├── infrastructure/database/throttle-repository.js ← connection, snowflake
+  ├── infrastructure/database/buffered-repository.js ← requests/throttle repos
+  ├── infrastructure/database/legacy-migration.js ← buffered-repo, throttle-repo
   ├── infrastructure/auth-loader.js ← config
   ├── domain/rate-limiter.js ← config
   ├── domain/token-tracker.js ← tokenizer, rate-limiter
@@ -50,7 +61,7 @@ index.js (composition root)
 | **Single Responsibility** | Each module does one thing. `rate-limiter.js` doesn't know about tokens. `nim-client.js` doesn't know about state. |
 | **Open/Closed** | New model? Add a rule to `config.thinkingModels`. New rate limit strategy? New file in `domain/`. |
 | **Liskov Substitution** | `nim-client.js` exposes a `send()` interface. Could swap NIM for any OpenAI-compatible API. |
-| **Interface Segregation** | `state-store.js` exposes `load()` and `save()` — not a bloated state manager. |
+| **Interface Segregation** | Repositories expose focused methods (`insert()`, `findByModel()`) — not a bloated DB manager. |
 | **Dependency Inversion** | `scheduler.js` receives a `processJob` function via constructor. Dependencies are injected in `index.js`. |
 
 ## Request Flow
@@ -59,11 +70,11 @@ index.js (composition root)
 
 2. **Scheduler**: Background loop checks cooldown, concurrency, rolling window, and dispatch gap before dequeuing.
 
-3. **processJob** (composition root): Loads API key, patches body via model injector, sends upstream via nim-client with retry logic.
+3. **processJob** (composition root): Loads API key, patches body via model injector, sends upstream via nim-client with retry logic. Every request (success or error) is persisted to SQLite via the buffered repository.
 
 4. **Response**: SSE responses piped through transparent `SSETapStream` for token counting. Non-SSE responses parsed for usage data.
 
-5. **Token tracking**: Usage recorded with NIM's `usage` field or `js-tiktoken` estimation. Persisted in state, logged at info level.
+5. **Token tracking**: Usage recorded with NIM's `usage` field or `js-tiktoken` estimation. Persisted in SQLite `requests` table, logged at info level.
 
 ## Throttling (4 layers)
 
@@ -86,7 +97,17 @@ Every request's token usage is intercepted and logged:
 - **SSE streaming**: transparent `SSETapStream` parses events in-flight. No buffering.
 - **Estimation**: `js-tiktoken` with `cl100k_base` encoding.
 
-Persisted in `nim-throttle-state.json` under `tokenUsage[]` and `tokenUsageSummary`.
+Persisted in SQLite `requests` table. Written via `BufferedRepository` (write-behind buffer with batch flush). See `src/infrastructure/database/` for the repository implementations.
+
+## Persistence Layer
+
+Config-driven via env vars. Key tables:
+
+- **`requests`** — every proxied request with model, tokens, latency, error status, SSE flag. Snowflake IDs.
+- **`throttle_events`** — append-only log of cooldown events and limit changes. Snowflake IDs.
+- **`throttle_state`** — singleton row with current `adaptiveLimit` and `cooldownUntil`.
+
+TTL pruning runs every hour; retention configured via `DB_RETENTION_DAYS`.
 
 ## Configuration
 
