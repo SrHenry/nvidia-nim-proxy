@@ -4,6 +4,7 @@
     "start": "node proxy.mjs"
   },
   "dependencies": {
-    "fastify": "^5.8.5"
+    "fastify": "^5.8.5",
+    "js-tiktoken": "^1.0.21"
   }
 }
