@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "node proxy.mjs"
+  },
+  "dependencies": {
+    "fastify": "^5.8.5"
+  }
+}
