@@ -55,13 +55,15 @@ The proxy reads the API key from OpenCode's auth file. The entry must match the 
 
 ## Throttling
 
-Three layers prevent rate limit violations:
+Four layers prevent rate limit violations:
 
-1. **Rolling window** -- 35 requests per 60-second window (configurable via `DEFAULT_LIMIT`). Timestamps are pruned on each scheduler tick.
+1. **Rolling window** -- 35 requests per 60-second window (configurable via `DEFAULT_LIMIT`). Timestamps are pruned on each scheduler tick. Timestamps are recorded when upstream requests complete, not when dispatched, keeping the window accurate under variable latency.
 
 2. **Concurrency cap** -- Max 2 in-flight upstream requests. Prevents parallel calls from consuming multiple window slots simultaneously.
 
-3. **Cooldown + adaptive limiting** -- On HTTP 429, the proxy halts all requests for 70 minutes and permanently decrements the rate limit by 1 (floor of 5). This persists across restarts via `nim-throttle-state.json`.
+3. **Dispatch gap** -- Minimum 2 seconds between dispatches (`MIN_DISPATCH_GAP_MS`). Prevents startup bursts where queued requests are dispatched as fast as concurrency allows.
+
+4. **Cooldown + adaptive limiting** -- On HTTP 429, the proxy halts all requests for 70 minutes and permanently decrements the rate limit by 1 (floor of 5). This persists across restarts via `nim-throttle-state.json`.
 
 ## SSE Streaming
 

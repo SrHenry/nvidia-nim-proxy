@@ -38,6 +38,12 @@ OpenCode ──▶ Fastify (127.0.0.1:8765) ──▶ NVIDIA NIM (integrate.api.
 - Prevents parallel requests from consuming multiple slots in the rolling window concurrently
 - The scheduler sleeps 25ms and retries if concurrency is maxed
 
+### Layer 2b — Dispatch Gap
+
+- `MIN_DISPATCH_GAP_MS = 2,000` — minimum 2 seconds between dispatches
+- Prevents startup bursts where queued requests are dispatched as fast as concurrency allows
+- The scheduler sleeps the remaining gap time if less than 2s has passed since the last dispatch
+
 ### Layer 3 — Cooldown + Adaptive Limiting
 
 - When a 429 is received from upstream, the proxy enters **cooldown** for 70 minutes (`COOLDOWN_MS = 70 * 60 * 1000`)
@@ -47,7 +53,8 @@ OpenCode ──▶ Fastify (127.0.0.1:8765) ──▶ NVIDIA NIM (integrate.api.
 
 ## Persistence
 
-- State is saved to `nim-throttle-state.json` on every dispatched request and on 429 cooldown
+- State is saved to `nim-throttle-state.json` when upstream requests complete and on 429 cooldown
+- Timestamps are recorded at completion (not dispatch), so the rolling window accurately reflects finished requests
 - Loaded at startup — the proxy remembers where it left off (timestamps, cooldown, adaptive limit)
 - Uses atomic write (tmp file + rename) to avoid corruption
 
