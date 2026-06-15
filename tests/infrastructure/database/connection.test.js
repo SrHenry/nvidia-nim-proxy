@@ -10,7 +10,13 @@ describe('Database connection', () => {
 
   afterEach(() => {
     if (db) db.close();
-    if (dbPath && fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    if (dbPath) fs.rmSync(dbPath, { force: true });
+  });
+
+  it('close is idempotent', () => {
+    db = new Database(':memory:');
+    db.close();
+    expect(() => db.close()).not.toThrow();
   });
 
   it('opens an in-memory database', () => {
@@ -113,6 +119,14 @@ describe('Database connection', () => {
       .prepare('SELECT COUNT(*) as c FROM requests')
       .get().c;
     expect(count).toBe(2n);
+  });
+
+  it('rejects invalid table name in insertBatch', () => {
+    db = new Database(':memory:');
+    db.migrate();
+    expect(() => {
+      db.insertBatch('nonexistent', ['id'], [[1n]]);
+    }).toThrow('Invalid table name: nonexistent');
   });
 
   it('sets WAL mode', () => {

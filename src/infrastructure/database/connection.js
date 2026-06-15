@@ -1,5 +1,9 @@
 import DatabaseClient from 'better-sqlite3';
 
+const VALID_TABLES = new Set([
+  '_schema_version', 'requests', 'throttle_events', 'throttle_state',
+]);
+
 export class Database {
   constructor(path) {
     this.path = path;
@@ -80,6 +84,7 @@ export class Database {
   }
 
   close() {
+    if (!this.db.open) return;
     this.db.close();
   }
 
@@ -90,6 +95,9 @@ export class Database {
 
   insertBatch(table, columns, rows) {
     if (rows.length === 0) return;
+    if (!VALID_TABLES.has(table)) {
+      throw new Error(`Invalid table name: ${table}`);
+    }
     const placeholders = rows
       .map(() => `(${columns.map(() => '?').join(',')})`)
       .join(',');
