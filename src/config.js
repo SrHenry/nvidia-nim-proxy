@@ -25,6 +25,10 @@ function envCsv(key, fallback) {
 
 const maxRpm = envNumber("MAX_RPM", 25);
 const cooldownMinutes = envNumber("COOLDOWN_MINUTES", 60);
+const dbRetentionDays = envNumber("DB_RETENTION_DAYS", 365);
+const snowflakeWorkerId = envNumber("SNOWFLAKE_WORKER_ID", 0);
+const flushIntervalMs = envNumber("FLUSH_INTERVAL_MS", 5000);
+const flushBatchSize = envNumber("FLUSH_BATCH_SIZE", 100);
 
 export default Object.freeze({
   port: envNumber("PORT", 4000),
@@ -34,6 +38,11 @@ export default Object.freeze({
     env("OPENCODE_AUTH", "") ||
     path.join(env("HOME", os.homedir()), ".local/share/opencode/auth.json"),
   stateFile: env("STATE_FILE", "./nim-throttle-state.json"),
+  dbPath: env("DB_PATH", "./oc-proxy.db"),
+  dbRetentionDays,
+  snowflakeWorkerId,
+  flushIntervalMs,
+  flushBatchSize,
   windowMs: 60_000,
   maxRpm,
   maxConcurrency: envNumber("MAX_CONCURRENCY", 2),
