@@ -380,6 +380,16 @@ function patchBody(model, body) {
     };
   }
 
+  if (/^minimaxai\/minimax-m3$/i.test(model)) {
+    return {
+      ...body,
+      chat_template_kwargs: {
+        ...(body.chat_template_kwargs || {}),
+        enable_thinking: true,
+      },
+    };
+  }
+
   return body;
 }
 

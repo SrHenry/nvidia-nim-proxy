@@ -20,7 +20,7 @@ OpenCode ──▶ Fastify (127.0.0.1:8765) ──▶ NVIDIA NIM (integrate.api.
 
 2. **Scheduler**: A `while(true)` loop that continuously checks four conditions before dequeuing a job. It runs as a fire-and-forget background task.
 
-3. **processJob**: The actual upstream HTTP call. Loads the API key from auth.json, patches the body for model-specific injections (GLM-5.1 thinking), makes the `fetch()` call, and writes the response directly to `reply.raw` (bypassing Fastify's reply lifecycle).
+3. **processJob**: The actual upstream HTTP call. Loads the API key from auth.json, patches the body for model-specific injections (GLM-5.1 and MiniMax-M3 thinking), makes the `fetch()` call, and writes the response directly to `reply.raw` (bypassing Fastify's reply lifecycle).
 
 ## Throttling Strategies (3 layers)
 
@@ -60,4 +60,4 @@ OpenCode ──▶ Fastify (127.0.0.1:8765) ──▶ NVIDIA NIM (integrate.api.
 
 ## Model Injection Layer
 
-`patchBody()` intercepts requests for `z-ai/glm-5.1` and injects `chat_template_kwargs: { enable_thinking: true }` into the request body, enabling the model's thinking/reasoning mode via the NVIDIA NIM API.
+`patchBody()` intercepts requests for `z-ai/glm-5.1` and `minimaxai/minimax-m3`, injecting `chat_template_kwargs: { enable_thinking: true }` into the request body to enable thinking/reasoning mode via the NVIDIA NIM API.

@@ -22,7 +22,7 @@ No build step. Single-file Node app (`proxy.mjs`). Requires `fastify` in `node_m
 
 - **Fastify v5**: `reply.sent` is read-only. Proxy uses `reply.hijack()` + `reply.raw.writeHead()` / `.pipe()` to bypass Fastify reply lifecycle. Don't try to set `reply.sent` directly.
 - **Auth file**: reads API key from `~/.local/share/opencode/auth.json` under provider key matching `PROVIDER` env var (default `nvidia`). The auth entry must have `type: "api"` and a `key` field.
-- **Model injection**: `z-ai/glm-5.1` gets `chat_template_kwargs: { enable_thinking: true }` injected automatically by `patchBody()`.
+- **Model injection**: `z-ai/glm-5.1` and `minimaxai/minimax-m3` get `chat_template_kwargs: { enable_thinking: true }` injected automatically by `patchBody()`.
 - **429 cooldown**: 70 minutes, with adaptive limit decrement (floor of 5). State persists across restarts.
 - **Dispatch gap**: minimum 2s between dispatches (`MIN_DISPATCH_GAP_MS`). Prevents startup bursts from hitting the rate limit.
 - **Timestamps at completion**: rolling window records timestamps when upstream requests finish, not when dispatched. Keeps the window accurate under variable latency.

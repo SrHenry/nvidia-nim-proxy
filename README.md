@@ -71,7 +71,7 @@ Streaming responses (`text/event-stream`) are piped directly from upstream to th
 
 ## Model Injection
 
-Requests to `z-ai/glm-5.1` are automatically patched with `chat_template_kwargs: { enable_thinking: true }`, enabling the model's thinking mode via NVIDIA NIM.
+Requests to `z-ai/glm-5.1` and `minimaxai/minimax-m3` are automatically patched with `chat_template_kwargs: { enable_thinking: true }`, enabling thinking mode via NVIDIA NIM.
 
 ## OpenCode Integration
 
@@ -89,6 +89,9 @@ Add to `~/.config/opencode/opencode.json`:
       "models": {
         "z-ai/glm-5.1": {
           "name": "GLM 5.1"
+        },
+        "minimaxai/minimax-m3": {
+          "name": "MiniMax M3"
         }
       }
     }
