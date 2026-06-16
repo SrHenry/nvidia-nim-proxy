@@ -49,17 +49,38 @@ export function createNimClient(config, authLoader, modelInjector, logger) {
         await sleep(delay * 1000);
       }
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": contentType,
-        },
-        body:
-          method === "GET"
-            ? undefined
-            : JSON.stringify(patchedBody),
-      });
+      let response;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 120_000);
+
+        response = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": contentType,
+          },
+          body:
+            method === "GET"
+              ? undefined
+              : JSON.stringify(patchedBody),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+      } catch (err) {
+        clearTimeout(timeout);
+        if (err.name === 'AbortError') {
+          if (attempt === config.maxRetries) {
+            throw new Error('upstream timeout');
+          }
+          if (logger) {
+            logger.warn({ attempt, model: body?.model, path }, 'upstream timeout, retrying');
+          }
+          continue;
+        }
+        throw err;
+      }
 
       lastResponse = response;
 
