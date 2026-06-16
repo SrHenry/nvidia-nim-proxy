@@ -95,8 +95,10 @@ export function createRpmEnforcer(config) {
   };
 }
 
-export function createTpmEnforcer(config) {
-  const maxTpm = config.maxTpm;
+export function createTpmEnforcer(config, resolveModelConfig) {
+  const fallback = { resolve: (m, k) => config[k], getMatchedOverrides: () => null };
+  const resolver = resolveModelConfig || fallback;
+  const resolve = resolver.resolve.bind(resolver);
   const modelStates = new Map();
 
   function getOrCreateModelState(model) {
@@ -126,16 +128,16 @@ export function createTpmEnforcer(config) {
     if (estimatedTokens <= 0) return true;
     const ms = getOrCreateModelState(model);
     pruneModelTokens(ms);
-    const inFlight = ms.pendingTokens;
-    return tokensInWindow(ms) + inFlight + estimatedTokens <= maxTpm;
+    const maxTpm = resolve(model, "maxTpm");
+    return tokensInWindow(ms) + ms.pendingTokens + estimatedTokens <= maxTpm;
   }
 
   function timeUntilModelAllowed(model, estimatedTokens) {
     if (estimatedTokens <= 0) return 0;
     const ms = getOrCreateModelState(model);
     pruneModelTokens(ms);
-    const inFlight = ms.pendingTokens;
-    const available = maxTpm - (tokensInWindow(ms) + inFlight);
+    const maxTpm = resolve(model, "maxTpm");
+    const available = maxTpm - (tokensInWindow(ms) + ms.pendingTokens);
     if (estimatedTokens <= available) return 0;
     if (ms.tokenTimestamps.length === 0) return 1000;
     const oldest = ms.tokenTimestamps[0];

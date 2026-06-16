@@ -111,6 +111,40 @@ describe("createTpmEnforcer", () => {
   });
 });
 
+describe("createTpmEnforcer with per-model maxTpm", () => {
+  let tpm;
+  const resolver = {
+    resolve: (model, key) => {
+      if (model === "glm-5.1" && key === "maxTpm") return 500;
+      if (model === "mini-max" && key === "maxTpm") return 2000;
+      return 1000;
+    },
+    getMatchedOverrides: () => null,
+  };
+
+  beforeEach(() => {
+    tpm = createTpmEnforcer({ windowMs: 60_000, maxTpm: 1000 }, resolver);
+  });
+
+  it("uses per-model maxTpm when set", () => {
+    expect(tpm.canDispatchForModel("glm-5.1", 600)).toBe(false);
+    expect(tpm.canDispatchForModel("glm-5.1", 400)).toBe(true);
+    expect(tpm.canDispatchForModel("mini-max", 1500)).toBe(true);
+    expect(tpm.canDispatchForModel("mini-max", 2500)).toBe(false);
+  });
+
+  it("falls back to global maxTpm for unconfigured models", () => {
+    expect(tpm.canDispatchForModel("unknown", 1100)).toBe(false);
+    expect(tpm.canDispatchForModel("unknown", 900)).toBe(true);
+  });
+
+  it("timeUntilModelAllowed uses per-model maxTpm", () => {
+    tpm.recordTokenUsage("glm-5.1", 500);
+    const wait = tpm.timeUntilModelAllowed("glm-5.1", 100);
+    expect(wait).toBeGreaterThan(0);
+  });
+});
+
 describe("createRateLimiter (composition)", () => {
   let limiter;
 
