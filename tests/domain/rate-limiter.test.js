@@ -1,47 +1,183 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createRateLimiter } from "../../src/domain/rate-limiter.js";
+import { createRpmEnforcer, createTpmEnforcer, createRateLimiter } from "../../src/domain/rate-limiter.js";
 
-describe("createRateLimiter", () => {
+describe("createRpmEnforcer", () => {
+  let rpm;
+
+  beforeEach(() => {
+    rpm = createRpmEnforcer({ windowMs: 60_000, maxRpm: 10, cooldownMs: 600_000 });
+  });
+
+  it("allows dispatch when under limit", () => {
+    expect(rpm.canDispatch()).toBe(true);
+  });
+
+  it("records dispatch and tracks usage", () => {
+    rpm.recordDispatch();
+    expect(rpm.currentUsage()).toBe(1);
+  });
+
+  it("enters cooldown and decrements adaptive limit", () => {
+    const initial = rpm.getState().adaptiveLimit;
+    rpm.enterCooldown();
+    expect(rpm.getState().adaptiveLimit).toBe(initial - 1);
+    expect(rpm.canDispatch()).toBe(false);
+  });
+
+  it("does not decrement below floor of 5", () => {
+    for (let i = 0; i < 20; i++) {
+      rpm.enterCooldown();
+    }
+    expect(rpm.getState().adaptiveLimit).toBe(5);
+  });
+
+  it("loads state from persisted data", () => {
+    rpm.loadState({
+      dispatchTimestamps: [Date.now()],
+      cooldownUntil: 0,
+      adaptiveLimit: 8,
+    });
+    expect(rpm.getState().adaptiveLimit).toBe(8);
+    expect(rpm.currentUsage()).toBe(1);
+  });
+});
+
+describe("createTpmEnforcer", () => {
+  let tpm;
+
+  beforeEach(() => {
+    tpm = createTpmEnforcer({ windowMs: 60_000, maxTpm: 1000 });
+  });
+
+  it("allows dispatch when under limit", () => {
+    expect(tpm.canDispatchForModel("test-model", 100)).toBe(true);
+  });
+
+  it("blocks when estimated tokens exceed limit", () => {
+    expect(tpm.canDispatchForModel("test-model", 2000)).toBe(false);
+  });
+
+  it("tracks token usage and pending tokens", () => {
+    tpm.reserveTokens("test-model", 300);
+    tpm.recordTokenUsage("test-model", 200);
+    expect(tpm.currentTokenUsage("test-model")).toBe(200);
+  });
+
+  it("accounts for pending tokens in capacity check", () => {
+    tpm.reserveTokens("test-model", 800);
+    expect(tpm.canDispatchForModel("test-model", 300)).toBe(false);
+    tpm.recordTokenUsage("test-model", 800);
+    expect(tpm.canDispatchForModel("test-model", 199)).toBe(true);
+    expect(tpm.canDispatchForModel("test-model", 201)).toBe(false);
+  });
+
+  it("handles multiple models independently", () => {
+    tpm.recordTokenUsage("model-a", 600);
+    tpm.recordTokenUsage("model-b", 600);
+    expect(tpm.canDispatchForModel("model-a", 500)).toBe(false);
+    expect(tpm.canDispatchForModel("model-b", 500)).toBe(false);
+    expect(tpm.currentTokenUsage("model-a")).toBe(600);
+    expect(tpm.currentTokenUsage("model-b")).toBe(600);
+  });
+
+  it("returns all model states", () => {
+    tpm.recordTokenUsage("m1", 100);
+    tpm.recordTokenUsage("m2", 200);
+    const states = tpm.getAllModelStates();
+    expect(Object.keys(states).sort()).toEqual(["m1", "m2"]);
+  });
+
+  it("loads persisted model states", () => {
+    tpm.loadModelStates({
+      "m1": { tokenTimestamps: [{ ts: Date.now(), tokens: 150 }], pendingTokens: 0 },
+    });
+    expect(tpm.currentTokenUsage("m1")).toBe(150);
+  });
+
+  it("estimates wait time when tokens unavailable", () => {
+    tpm.recordTokenUsage("test-model", 1000);
+    const wait = tpm.timeUntilModelAllowed("test-model", 100);
+    expect(wait).toBeGreaterThan(0);
+  });
+
+  it("returns 0 wait when tokens available", () => {
+    expect(tpm.timeUntilModelAllowed("test-model", 100)).toBe(0);
+  });
+
+  it("caps pendingTokens at floor 0 on over-release", () => {
+    tpm.reserveTokens("test-model", 100);
+    tpm.recordTokenUsage("test-model", 200);
+    expect(tpm.getAllModelStates()["test-model"].pendingTokens).toBe(0);
+  });
+});
+
+describe("createRateLimiter (composition)", () => {
   let limiter;
 
   beforeEach(() => {
     limiter = createRateLimiter({
       windowMs: 60_000,
       maxRpm: 10,
+      maxTpm: 1000,
       cooldownMs: 600_000,
     });
   });
 
-  it("allows dispatch when under limit", () => {
+  it("allows dispatch when under both limits", () => {
+    expect(limiter.canDispatch("m", "/v1/chat/completions", 100)).toBe(true);
+  });
+
+  it("blocks on RPM when over limit", () => {
+    for (let i = 0; i < 10; i++) {
+      limiter.recordDispatch("m", "/v1/chat/completions", 10);
+    }
+    expect(limiter.canDispatch("m", "/v1/chat/completions", 10)).toBe(false);
+  });
+
+  it("blocks on TPM when over limit", () => {
+    limiter.recordDispatch("m", "/v1/chat/completions", 950);
+    limiter.recordCompletion("m", "/v1/chat/completions");
+    limiter.recordTokenUsage("m", 950);
+    expect(limiter.canDispatch("m", "/v1/chat/completions", 100)).toBe(false);
+  });
+
+  it("skips TPM check for non-inference paths", () => {
+    expect(limiter.canDispatch("m", "/v1/models", 999999)).toBe(true);
+  });
+
+  it("records token usage per model", () => {
+    limiter.recordTokenUsage("m1", 300);
+    limiter.recordTokenUsage("m2", 500);
+    expect(limiter.currentTokenUsage("m1")).toBe(300);
+    expect(limiter.currentTokenUsage("m2")).toBe(500);
+  });
+
+  it("loads state with modelStates", () => {
+    limiter.loadState({
+      dispatchTimestamps: [],
+      cooldownUntil: 0,
+      adaptiveLimit: 5,
+      modelStates: {
+        "m1": { tokenTimestamps: [{ ts: Date.now(), tokens: 400 }], pendingTokens: 0 },
+      },
+    });
+    expect(limiter.getState().adaptiveLimit).toBe(5);
+    expect(limiter.currentTokenUsage("m1")).toBeCloseTo(400, -1);
+  });
+
+  it("backward compatibility: canDispatch() without args", () => {
     expect(limiter.canDispatch()).toBe(true);
   });
 
-  it("records dispatch and tracks usage", () => {
-    limiter.recordDispatch();
-    expect(limiter.currentUsage()).toBe(1);
-  });
-
-  it("enters cooldown and decrements adaptive limit", () => {
+  it("backward compatibility: enterCooldown", () => {
     const initial = limiter.getState().adaptiveLimit;
     limiter.enterCooldown();
     expect(limiter.getState().adaptiveLimit).toBe(initial - 1);
     expect(limiter.canDispatch()).toBe(false);
   });
 
-  it("does not decrement below floor of 5", () => {
-    for (let i = 0; i < 20; i++) {
-      limiter.enterCooldown();
-    }
-    expect(limiter.getState().adaptiveLimit).toBe(5);
-  });
-
-  it("loads state from persisted data", () => {
-    limiter.loadState({
-      dispatchTimestamps: [Date.now()],
-      cooldownUntil: 0,
-      adaptiveLimit: 8,
-    });
-    expect(limiter.getState().adaptiveLimit).toBe(8);
-    expect(limiter.currentUsage()).toBe(1);
+  it("backward compatibility: currentUsage", () => {
+    limiter.recordDispatch();
+    expect(limiter.currentUsage()).toBeGreaterThanOrEqual(1);
   });
 });
