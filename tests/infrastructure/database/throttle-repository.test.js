@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Database } from '../../../src/infrastructure/database/connection.js';
+import { up as migrateV1 } from '../../../migrations/1781555473000000000-initial-schema.js';
+import { up as migrateV2 } from '../../../migrations/1781621796372000000-model-throttle-state.js';
+import { up as migrateV3 } from '../../../migrations/1781637840412443418-model-config-overrides.js';
 import { createSnowflakeGenerator } from '../../../src/infrastructure/database/snowflake.js';
 import { ThrottleRepository } from '../../../src/infrastructure/database/throttle-repository.js';
 
@@ -10,7 +13,7 @@ describe('ThrottleRepository', () => {
 
   beforeEach(() => {
     db = new Database(':memory:');
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection); migrateV2(db.connection); migrateV3(db.connection);
     snowflake = createSnowflakeGenerator({ workerId: 0 });
     repo = new ThrottleRepository(db, snowflake);
   });
