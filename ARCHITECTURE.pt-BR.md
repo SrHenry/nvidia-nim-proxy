@@ -64,7 +64,7 @@ index.js (raiz de composição)
 | Princípio | Aplicação |
 |---|---|
 | **Responsabilidade Única** | Cada módulo faz uma coisa. `rate-limiter.js` expõe três funções: `createRpmEnforcer` (disparos globais + cooldown), `createTpmEnforcer` (tokens por modelo + pendentes), e `createRateLimiter` (fábrica de composição). `nim-client.js` não sabe sobre estado. |
-| **Aberto/Fechado** | Novo modelo? Adicione uma regra em `config.thinkingModels`. Nova estratégia de rate limit? Novo arquivo em `domain/`. |
+| **Aberto/Fechado** | Novo modelo? Adicione uma regra em `config.models`. Nova estratégia de rate limit? Novo arquivo em `domain/`. |
 | **Substituição de Liskov** | `nim-client.js` expõe uma interface `send()`. Poderia trocar NIM por qualquer API compatível com OpenAI. |
 | **Segregação de Interfaces** | Repositórios expõem métodos focados (`insert()`, `findByModel()`) — não um gerenciador de DB inchado. |
 | **Inversão de Dependência** | `scheduler.js` recebe uma função `processJob` via construtor. Dependências são injetadas em `index.js`. |

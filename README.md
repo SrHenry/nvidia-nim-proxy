@@ -93,37 +93,32 @@ Every request's token usage is intercepted and logged:
 
 Usage is persisted in SQLite (`requests` table) via write-behind buffer and logged at `info` level.
 
-## Per-Model Config Overrides
+## Per-Model Config Overrides + Injection
 
-The `models` array in `src/config.js` allows overriding rate limit and retry settings per model:
+The unified `models` array in `src/config.js` handles both request body injection and per-model throttle/scheduler overrides:
 
 ```js
 models: [
   {
-    pattern: /^nvidia\/llama-3\.3/i,
-    config: { maxTpm: 100000, maxConcurrency: 3, cooldownMs: 30000 },
-  },
-],
-```
-
-Supported overrides: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`. First matching pattern wins.
-
-## Model Injection
-
-Config-driven via `thinkingModels` array in `src/config.js`. Add new models by adding a rule:
-
-```js
-thinkingModels: [
-  {
     pattern: /^z-ai\/glm-?5\.?1/i,
     injection: { chat_template_kwargs: { enable_thinking: true } },
+    override: { maxTpm: 250000, cooldownMs: 120000 },
   },
   {
     pattern: /^minimaxai\/minimax-m3$/i,
     injection: { chat_template_kwargs: { enable_thinking: true } },
   },
+  {
+    pattern: /^nvidia\/llama-3\.3/i,
+    override: { maxTpm: 100000, maxConcurrency: 3 },
+  },
 ],
 ```
+
+- **`injection`** — patches request body before sending upstream
+- **`override`** — per-model throttle/scheduler params: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`
+
+First matching pattern wins. Resolver threaded through rate-limiter, scheduler, NIM client, and index.js.
 
 ## Schema Migrations
 

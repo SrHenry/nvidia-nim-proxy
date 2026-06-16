@@ -93,35 +93,30 @@ O uso é persistido em SQLite (tabela `requests`) via buffer write-behind e regi
 
 ## Configuração por Modelo
 
-O array `models` em `src/config.js` permite sobrescrever configurações de rate limit e retry por modelo:
+O array unificado `models` em `src/config.js` lida com injeção no body da requisição e sobrescritas por modelo de throttle/scheduler:
 
 ```js
 models: [
   {
-    pattern: /^nvidia\/llama-3\.3/i,
-    config: { maxTpm: 100000, maxConcurrency: 3, cooldownMs: 30000 },
-  },
-],
-```
-
-Overrides suportados: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`. Primeiro padrão correspondente vence.
-
-## Injeção de Modelo
-
-Configurável via array `thinkingModels` em `src/config.js`. Adicione novos modelos com uma regra:
-
-```js
-thinkingModels: [
-  {
     pattern: /^z-ai\/glm-?5\.?1/i,
     injection: { chat_template_kwargs: { enable_thinking: true } },
+    override: { maxTpm: 250000, cooldownMs: 120000 },
   },
   {
     pattern: /^minimaxai\/minimax-m3$/i,
     injection: { chat_template_kwargs: { enable_thinking: true } },
   },
+  {
+    pattern: /^nvidia\/llama-3\.3/i,
+    override: { maxTpm: 100000, maxConcurrency: 3 },
+  },
 ],
 ```
+
+- **`injection`** — patcheia o body antes de enviar upstream
+- **`override`** — params por modelo: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`
+
+Primeiro padrão correspondente vence.
 
 ## Migrações de Schema
 
