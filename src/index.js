@@ -76,6 +76,7 @@ async function processJob(job) {
           tap.finalTokens || tokenTracker.estimateFromResponse(model, body, null);
         const totalTokens = promptTokens + completionTokens;
         tokenTracker.record(model, promptTokens, completionTokens, source);
+        rateLimiter.recordTokenUsage(totalTokens);
         requestsRepo.insert({
           model,
           statusCode,
@@ -113,6 +114,7 @@ async function processJob(job) {
       }
 
       tokenTracker.record(model, promptTokens, completionTokens, tokenSource);
+      rateLimiter.recordTokenUsage(promptTokens + completionTokens);
       requestsRepo.insert({
         model,
         statusCode,
@@ -142,13 +144,20 @@ async function processJob(job) {
         adaptiveLimit: state.adaptiveLimit,
         cooldownUntil: state.cooldownUntil,
       });
+      const summary = tokenTracker.getSummary();
       throttleRepo.insertEvent({
         type: "cooldown_enter",
         limitBefore: state.adaptiveLimit + 1,
         limitAfter: state.adaptiveLimit,
         cooldownUntil: state.cooldownUntil,
         reason: errorMessage,
-        metadata: JSON.stringify({ model, path: upstreamPath }),
+        metadata: JSON.stringify({
+          model,
+          path: upstreamPath,
+          windowCount: rateLimiter.currentUsage(),
+          windowTokens: summary.windowTokens,
+          totalRequests: summary.totalRequests,
+        }),
       });
     }
 
@@ -177,7 +186,13 @@ async function processJob(job) {
 }
 
 const nimClient = createNimClient(config, authLoader, modelInjector, null);
-const scheduler = createScheduler(config, rateLimiter, processJob, null);
+
+function estimateJobTokens(body) {
+  if (!body?.messages) return 0;
+  return tokenizer.estimateMessageTokens(body.messages) + config.completionBuffer;
+}
+
+const scheduler = createScheduler(config, rateLimiter, processJob, estimateJobTokens, null);
 
 const pruneInterval = setInterval(() => {
   const cutoff = Date.now() - config.dbRetentionDays * 86400000;

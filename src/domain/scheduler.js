@@ -1,4 +1,4 @@
-export function createScheduler(config, rateLimiter, processJob, logger) {
+export function createScheduler(config, rateLimiter, processJob, estimateJobTokens, logger) {
   const queue = [];
   let active = 0;
   let lastDispatchAt = 0;
@@ -45,8 +45,10 @@ export function createScheduler(config, rateLimiter, processJob, logger) {
           continue;
         }
 
-        if (!rateLimiter.canDispatch()) {
-          const wait = rateLimiter.timeUntilDispatchAllowed();
+        const estimated = estimateJobTokens ? estimateJobTokens(queue[0].body) : 0;
+
+        if (!rateLimiter.canDispatch(estimated)) {
+          const wait = rateLimiter.timeUntilDispatchAllowed(estimated);
           if (wait > 0) await sleep(wait);
           continue;
         }

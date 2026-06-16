@@ -24,6 +24,8 @@ function envCsv(key, fallback) {
 }
 
 const maxRpm = envNumber("MAX_RPM", 25);
+const maxTpm = envNumber("MAX_TPM", 350_000);
+const completionBuffer = envNumber("COMPLETION_BUFFER", 4096);
 const cooldownMinutes = envNumber("COOLDOWN_MINUTES", 60);
 const dbRetentionDays = envNumber("DB_RETENTION_DAYS", 365);
 const snowflakeWorkerId = envNumber("SNOWFLAKE_WORKER_ID", 0);
@@ -45,6 +47,8 @@ export default Object.freeze({
   flushBatchSize,
   windowMs: 60_000,
   maxRpm,
+  maxTpm,
+  completionBuffer,
   maxConcurrency: envNumber("MAX_CONCURRENCY", 2),
   cooldownMs: cooldownMinutes * 60 * 1000,
   maxRetries: envNumber("MAX_RETRIES", 3),
