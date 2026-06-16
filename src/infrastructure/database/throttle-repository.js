@@ -79,4 +79,42 @@ export class ThrottleRepository {
       .run(beforeTimestamp);
     return result.changes;
   }
+
+  getAllModelStates() {
+    try {
+      const rows = this.db.connection
+        .prepare('SELECT model, token_timestamps, pending_tokens, updated_at FROM model_throttle_state')
+        .all();
+      return rows.map(r => ({
+        model: r.model,
+        tokenTimestamps: JSON.parse(r.token_timestamps || '[]'),
+        pendingTokens: Number(r.pending_tokens),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  setModelState(model, data) {
+    try {
+      this.db.connection
+        .prepare(`
+          INSERT INTO model_throttle_state (model, token_timestamps, pending_tokens, updated_at)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(model) DO UPDATE SET
+            token_timestamps = excluded.token_timestamps,
+            pending_tokens = excluded.pending_tokens,
+            updated_at = excluded.updated_at
+        `)
+        .run(model, JSON.stringify(data.tokenTimestamps || []), data.pendingTokens ?? 0, Date.now());
+    } catch {
+      // table may not exist yet (pre-migration)
+    }
+  }
+
+  saveAllModelStates(modelStates) {
+    for (const [model, data] of Object.entries(modelStates)) {
+      this.setModelState(model, data);
+    }
+  }
 }
