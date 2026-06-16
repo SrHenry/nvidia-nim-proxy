@@ -1,4 +1,4 @@
-> [Ver em pt-BR](README.pt-BR.md)
+> [Ver também em pt-BR](README.pt-BR.md)
 
 # NVIDIA NIM Proxy
 
