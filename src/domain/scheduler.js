@@ -1,4 +1,5 @@
-export function createScheduler(config, rateLimiter, processJob, estimateJobTokens, logger) {
+export function createScheduler(config, rateLimiter, processJob, estimateJobTokens, logger, resolveModelConfig) {
+  const rmc = resolveModelConfig || { resolve: (m, k) => config[k], getMatchedOverrides: () => null };
   const queue = [];
   let active = 0;
   let lastDispatchAt = 0;
@@ -34,15 +35,15 @@ export function createScheduler(config, rateLimiter, processJob, estimateJobToke
           continue;
         }
 
-        if (active >= config.maxConcurrency) {
-          await sleep(25);
-          continue;
-        }
-
         const job = queue[0];
         const model = job.body?.model || 'unknown';
         const path = job.upstreamPath || '';
         const estimated = estimateJobTokens ? estimateJobTokens(job.body) : 0;
+
+        if (active >= rmc.resolve(model, 'maxConcurrency')) {
+          await sleep(25);
+          continue;
+        }
 
         const cooldownWait = rateLimiter.timeUntilDispatchAllowed(model, path, estimated);
         if (cooldownWait > 0) {
@@ -57,8 +58,8 @@ export function createScheduler(config, rateLimiter, processJob, estimateJobToke
         }
 
         const gap = Math.max(
-          config.minDispatchGapMs,
-          Math.ceil(estimated * config.windowMs / Math.max(config.maxTpm, 1))
+          rmc.resolve(model, 'minDispatchGapMs'),
+          Math.ceil(estimated * config.windowMs / Math.max(rmc.resolve(model, 'maxTpm'), 1))
         );
         const sinceLastDispatch = now() - lastDispatchAt;
         if (sinceLastDispatch < gap) {
