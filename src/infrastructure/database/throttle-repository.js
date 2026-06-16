@@ -23,9 +23,13 @@ export class ThrottleRepository {
         .get();
     }
 
+    const modelCooldowns = row.model_cooldowns
+      ? JSON.parse(row.model_cooldowns)
+      : {};
     return {
       adaptiveLimit: Number(row.adaptive_limit),
       cooldownUntil: Number(row.cooldown_until),
+      modelCooldowns,
       updatedAt: Number(row.updated_at),
     };
   }
@@ -34,18 +38,20 @@ export class ThrottleRepository {
     const current = this.getState();
     const adaptiveLimit = partial.adaptiveLimit ?? current.adaptiveLimit;
     const cooldownUntil = partial.cooldownUntil ?? current.cooldownUntil;
+    const modelCooldowns = partial.modelCooldowns ?? current.modelCooldowns;
     const updatedAt = Date.now();
 
     this.db.connection
       .prepare(`
-        INSERT INTO throttle_state (id, adaptive_limit, cooldown_until, updated_at)
-        VALUES (1, ?, ?, ?)
+        INSERT INTO throttle_state (id, adaptive_limit, cooldown_until, model_cooldowns, updated_at)
+        VALUES (1, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           adaptive_limit = excluded.adaptive_limit,
           cooldown_until = excluded.cooldown_until,
+          model_cooldowns = excluded.model_cooldowns,
           updated_at = excluded.updated_at
       `)
-      .run(adaptiveLimit, cooldownUntil, updatedAt);
+      .run(adaptiveLimit, cooldownUntil, JSON.stringify(modelCooldowns), updatedAt);
   }
 
   insertEvent(event) {
