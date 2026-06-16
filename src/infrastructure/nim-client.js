@@ -4,7 +4,8 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function createNimClient(config, authLoader, modelInjector, logger) {
+export function createNimClient(config, authLoader, modelInjector, logger, resolveModelConfig) {
+  const rmc = resolveModelConfig || { resolve: (m, k) => config[k], getMatchedOverrides: () => null };
   function filterHeaders(responseHeaders) {
     const filtered = {};
     for (const [key, value] of responseHeaders) {
@@ -31,13 +32,17 @@ export function createNimClient(config, authLoader, modelInjector, logger) {
 
     const contentType = headers["content-type"] ?? "application/json";
 
+    const model = body?.model;
+    const maxRetries = rmc.resolve(model, 'maxRetries');
+    const retryDelays = rmc.resolve(model, 'retryDelays');
+
     let lastResponse = null;
 
-    for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) {
         const delay =
-          config.retryDelays[attempt - 1] ||
-          config.retryDelays[config.retryDelays.length - 1];
+          retryDelays[attempt - 1] ||
+          retryDelays[retryDelays.length - 1];
 
         if (logger) {
           logger.info(
@@ -71,7 +76,7 @@ export function createNimClient(config, authLoader, modelInjector, logger) {
       } catch (err) {
         clearTimeout(timeout);
         if (err.name === 'AbortError') {
-          if (attempt === config.maxRetries) {
+          if (attempt === maxRetries) {
             throw new Error('upstream timeout');
           }
           if (logger) {
@@ -98,7 +103,7 @@ export function createNimClient(config, authLoader, modelInjector, logger) {
           {
             status: 429,
             attempt,
-            maxRetries: config.maxRetries,
+            maxRetries,
             headers: respHeaders,
             model: body?.model,
             path,
@@ -107,9 +112,9 @@ export function createNimClient(config, authLoader, modelInjector, logger) {
         );
       }
 
-      if (attempt === config.maxRetries) {
+      if (attempt === maxRetries) {
         throw new Error(
-          `429 exhausted ${config.maxRetries + 1} attempts`
+          `429 exhausted ${maxRetries + 1} attempts`
         );
       }
     }
