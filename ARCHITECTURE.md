@@ -58,7 +58,7 @@ index.js (composition root)
 
 | Principle | Application |
 |---|---|
-| **Single Responsibility** | Each module does one thing. `rate-limiter.js` doesn't know about tokens. `nim-client.js` doesn't know about state. |
+| **Single Responsibility** | Each module does one thing. `rate-limiter.js` manages resource budgets (dispatches and tokens). `nim-client.js` doesn't know about state. |
 | **Open/Closed** | New model? Add a rule to `config.thinkingModels`. New rate limit strategy? New file in `domain/`. |
 | **Liskov Substitution** | `nim-client.js` exposes a `send()` interface. Could swap NIM for any OpenAI-compatible API. |
 | **Interface Segregation** | Repositories expose focused methods (`insert()`, `findByModel()`) — not a bloated DB manager. |
@@ -68,7 +68,7 @@ index.js (composition root)
 
 1. **Route** (`/v1/*`): Request intercepted, `reply.hijack()` takes over, job pushed to queue.
 
-2. **Scheduler**: Background loop checks cooldown, concurrency, rolling window, and dispatch gap before dequeuing.
+2. **Scheduler**: Background loop checks cooldown, concurrency, rolling window (RPM + TPM), and dispatch gap before dequeuing.
 
 3. **processJob** (composition root): Loads API key, patches body via model injector, sends upstream via nim-client with retry logic. Every request (success or error) is persisted to SQLite via the buffered repository.
 
@@ -76,25 +76,29 @@ index.js (composition root)
 
 5. **Token tracking**: Usage recorded with NIM's `usage` field or `js-tiktoken` estimation. Persisted in SQLite `requests` table, logged at info level.
 
-## Throttling (4 layers)
+## Throttling (5 layers)
 
 ### Layer 1 — Rolling Window (dispatch-based)
 `dispatchTimestamps[]` tracks when requests leave the proxy. `MAX_RPM` (default 25) per 60-second window.
 
-### Layer 2 — Concurrency Limiter
+### Layer 2 — Token Window (TPM)
+`tokenTimestamps[]` tracks actual token usage per request. `MAX_TPM` (default 350K) per 60-second window. Before dispatch, estimated cost (prompt tokens from `js-tiktoken` + `COMPLETION_BUFFER`) is checked against available budget. Composes as AND gate with RPM — both must pass.
+
+### Layer 3 — Concurrency Limiter
 `MAX_CONCURRENCY` (default 2) in-flight upstream requests max.
 
-### Layer 3 — Dispatch Gap
+### Layer 4 — Dispatch Gap
 `MIN_DISPATCH_GAP_MS` (~2.4s at 25 RPM) enforced between dispatches.
 
-### Layer 4 — 429 Retry + Cooldown
+### Layer 5 — 429 Retry + Cooldown
 Retries up to `MAX_RETRIES` (default 3) with `RETRY_DELAYS` (20s, 40s, 60s). If all fail: `COOLDOWN_MINUTES` (default 60) cooldown + `adaptiveLimit--` (floor 5).
 
 ## Token Usage Tracking
 
 Every request's token usage is intercepted and logged:
-- **Non-SSE**: extracts NIM's `usage` field. Falls back to `js-tiktoken` estimation.
-- **SSE streaming**: transparent `SSETapStream` parses events in-flight. No buffering.
+- **SSE streaming**: transparent `SSETapStream` parses events in-flight. Counts `delta.content` and `delta.reasoning_content`. Also parses NIM's `:` comment lines for exact `input_tokens`/`output_tokens`.
+- **Non-SSE**: extracts NIM's `usage` field. Falls back to `js-tiktoken` (checks `reasoning_content` for thinking models).
+- **SSE detection**: reads response `content-type` header, not request `Accept`.
 - **Estimation**: `js-tiktoken` with `cl100k_base` encoding.
 
 Persisted in SQLite `requests` table. Written via `BufferedRepository` (write-behind buffer with batch flush). See `src/infrastructure/database/` for the repository implementations.

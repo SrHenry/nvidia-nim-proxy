@@ -30,9 +30,9 @@ No build step. Single-file entry (`proxy.mjs` → `src/index.js`). Requires `fas
 - **Auth file**: reads API key from `~/.local/share/opencode/auth.json` under provider key matching `PROVIDER` env var (default `nvidia`). The auth entry must have `type: "api"` and a `key` field.
 - **Model injection**: config-driven via `thinkingModels` array in `src/config.js`. Add new models by adding a rule — zero code changes.
 - **429 handling**: retries up to 3 times with 20s/40s/60s backoff, then enters 60-min cooldown with adaptive limit decrement (floor of 5). All configurable via env vars.
-- **Dispatch-based tracking**: rolling window tracks dispatch timestamps (not completion). More accurate against NIM's rate limiting.
+- **Dispatch + token windows**: RPM rolling window (dispatch timestamps) and TPM rolling window (actual token usage) compose as an AND gate — both must pass before dispatch.
 - **Dispatch gap**: minimum 2.4s between dispatches at 25 RPM. Prevents startup bursts.
-- **Token tracking**: every request's token usage is logged and persisted. Uses NIM's `usage` field when available, falls back to `js-tiktoken` estimation.
+- **Token tracking**: every request's token usage is logged and persisted. Uses NIM's meta comment lines (`input_tokens`/`output_tokens`) when available, falls back to `js-tiktoken` estimation. SSE detection reads response `content-type` header.
 - **SSE streaming**: transparent tap stream intercepts SSE for token counting without buffering. Data flows to client in real-time.
 - **Content-Encoding**: proxy strips `content-encoding` and `content-length` headers since it re-writes the response body.
 - **SQLite persistence**: uses `better-sqlite3` with WAL mode. Snowflake IDs (64-bit BigInt) for requests and throttle_events. Repository pattern with write-behind buffer for high-frequency inserts. `defaultSafeIntegers(true)` means all INTEGER columns return as BigInt — repositories convert to Number where needed.

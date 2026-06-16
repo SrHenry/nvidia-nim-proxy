@@ -241,6 +241,8 @@ logger.info(
     flushIntervalMs: config.flushIntervalMs,
     flushBatchSize: config.flushBatchSize,
     maxRpm: config.maxRpm,
+    maxTpm: config.maxTpm,
+    completionBuffer: config.completionBuffer,
     cooldownMinutes: config.cooldownMs / 60_000,
     maxRetries: config.maxRetries,
     retryDelays: config.retryDelays,

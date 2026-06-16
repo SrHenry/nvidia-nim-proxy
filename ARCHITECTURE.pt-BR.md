@@ -58,7 +58,7 @@ index.js (raiz de composição)
 
 | Princípio | Aplicação |
 |---|---|
-| **Responsabilidade Única** | Cada módulo faz uma coisa. `rate-limiter.js` não sabe sobre tokens. `nim-client.js` não sabe sobre estado. |
+| **Responsabilidade Única** | Cada módulo faz uma coisa. `rate-limiter.js` gerencia orçamentos de recursos (disparos e tokens). `nim-client.js` não sabe sobre estado. |
 | **Aberto/Fechado** | Novo modelo? Adicione uma regra em `config.thinkingModels`. Nova estratégia de rate limit? Novo arquivo em `domain/`. |
 | **Substituição de Liskov** | `nim-client.js` expõe uma interface `send()`. Poderia trocar NIM por qualquer API compatível com OpenAI. |
 | **Segregação de Interfaces** | Repositórios expõem métodos focados (`insert()`, `findByModel()`) — não um gerenciador de DB inchado. |
@@ -68,7 +68,7 @@ index.js (raiz de composição)
 
 1. **Rota** (`/v1/*`): Requisição interceptada, `reply.hijack()` assume o controle, job enviado para a fila.
 
-2. **Scheduler**: Loop em background verifica cooldown, concorrência, janela deslizante e espaçamento entre disparos antes de desenfileirar.
+2. **Scheduler**: Loop em background verifica cooldown, concorrência, janela deslizante (RPM + TPM) e espaçamento entre disparos antes de desenfileirar.
 
 3. **processJob** (raiz de composição): Carrega chave da API, modifica o body via model injector, envia upstream via nim-client com lógica de retry. Toda requisição (sucesso ou erro) é persistida em SQLite via repositório bufferizado.
 
@@ -76,25 +76,29 @@ index.js (raiz de composição)
 
 5. **Rastreio de tokens**: Uso registrado com o campo `usage` da NIM ou estimativa `js-tiktoken`. Persistido na tabela `requests` do SQLite, registrado em nível info.
 
-## Limitador de Taxa (4 camadas)
+## Limitador de Taxa (5 camadas)
 
 ### Camada 1 — Janela Deslizante (baseada em disparos)
 `dispatchTimestamps[]` rastreia quando as requisições saem do proxy. `MAX_RPM` (padrão 25) por janela de 60 segundos.
 
-### Camada 2 — Limitador de Concorrência
+### Camada 2 — Janela de Tokens (TPM)
+`tokenTimestamps[]` rastreia uso real de tokens por requisição. `MAX_TPM` (padrão 350K) por janela de 60 segundos. Antes do disparo, o custo estimado (tokens de prompt do `js-tiktoken` + `COMPLETION_BUFFER`) é verificado contra o orçamento disponível. Composta como porta AND com RPM — ambas devem passar.
+
+### Camada 3 — Limitador de Concorrência
 `MAX_CONCURRENCY` (padrão 2) requisições upstream em andamento no máximo.
 
-### Camada 3 — Espaçamento entre Disparos
+### Camada 4 — Espaçamento entre Disparos
 `MIN_DISPATCH_GAP_MS` (~2.4s a 25 RPM) aplicado entre disparos.
 
-### Camada 4 — Retry 429 + Cooldown
+### Camada 5 — Retry 429 + Cooldown
 Retry até `MAX_RETRIES` (padrão 3) com `RETRY_DELAYS` (20s, 40s, 60s). Se todos falharem: `COOLDOWN_MINUTES` (padrão 60) de cooldown + `adaptiveLimit--` (mínimo 5).
 
 ## Rastreamento de Uso de Tokens
 
 O uso de tokens de toda requisição é interceptado e registrado:
-- **Não-SSE**: extrai o campo `usage` da NIM. Faz fallback para estimativa `js-tiktoken`.
-- **SSE streaming**: `SSETapStream` transparente analisa eventos em trânsito. Sem buffering.
+- **SSE streaming**: `SSETapStream` transparente analisa eventos em trânsito. Conta `delta.content` e `delta.reasoning_content`. Também analisa linhas de comentário `:` da NIM para `input_tokens`/`output_tokens` exatos.
+- **Não-SSE**: extrai o campo `usage` da NIM. Fallback para `js-tiktoken` (verifica `reasoning_content` para modelos de pensamento).
+- **Detecção SSE**: lê o header `content-type` da resposta, não o `Accept` da requisição.
 - **Estimativa**: `js-tiktoken` com codificação `cl100k_base`.
 
 Persistido na tabela `requests` do SQLite. Escrito via `BufferedRepository` (buffer write-behind com descarga em lote). Veja `src/infrastructure/database/` para as implementações dos repositórios.

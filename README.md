@@ -47,6 +47,8 @@ All configuration is via environment variables:
 | `FLUSH_INTERVAL_MS` | `5000` | Write-behind buffer flush interval |
 | `FLUSH_BATCH_SIZE` | `100` | Write-behind buffer batch size trigger |
 | `MAX_RPM` | `25` | Target requests per minute (NIM publishes 40, we stay conservative) |
+| `MAX_TPM` | `350000` | Target tokens per minute (proactive throttle, composes with RPM) |
+| `COMPLETION_BUFFER` | `4096` | Estimated completion overhead added to prompt tokens for TPM check |
 | `COOLDOWN_MINUTES` | `60` | Minutes to wait after exhausted 429 retries |
 | `MAX_CONCURRENCY` | `2` | Max in-flight upstream requests |
 | `MAX_RETRIES` | `3` | Retries on 429 before entering cooldown |
@@ -68,22 +70,25 @@ The proxy reads the API key from OpenCode's auth file. The entry must match the 
 
 ## Throttling
 
-Four layers prevent rate limit violations:
+Five layers prevent rate limit violations:
 
 1. **Rolling window (dispatch-based)** -- Tracks when requests leave the proxy (not when they complete). `MAX_RPM` requests per 60-second window.
 
-2. **Concurrency cap** -- Max `MAX_CONCURRENCY` in-flight upstream requests.
+2. **Token window (TPM)** -- Tracks actual token usage in a 60-second rolling window. Before dispatch, estimated token cost (prompt + `COMPLETION_BUFFER`) is checked against `MAX_TPM`. Both RPM and TPM gates must pass.
 
-3. **Dispatch gap** -- Minimum `MIN_DISPATCH_GAP_MS` between dispatches (~2.4s at 25 RPM).
+3. **Concurrency cap** -- Max `MAX_CONCURRENCY` in-flight upstream requests.
 
-4. **429 retry + cooldown + adaptive limiting** -- Retries up to `MAX_RETRIES` with exponential backoff. If all fail, halts for `COOLDOWN_MINUTES` and decrements the rate limit by 1 (floor of 5).
+4. **Dispatch gap** -- Minimum `MIN_DISPATCH_GAP_MS` between dispatches (~2.4s at 25 RPM).
+
+5. **429 retry + cooldown + adaptive limiting** -- Retries up to `MAX_RETRIES` with exponential backoff. If all fail, halts for `COOLDOWN_MINUTES` and decrements the rate limit by 1 (floor of 5).
 
 ## Token Usage Tracking
 
 Every request's token usage is intercepted and logged:
 
-- **Non-SSE responses**: extracts NIM's `usage` field directly. Falls back to `js-tiktoken` estimation.
-- **SSE streaming**: transparent `SSETapStream` parses events in-flight without buffering.
+- **SSE streaming**: transparent `SSETapStream` parses events in-flight without buffering. Counts both `delta.content` and `delta.reasoning_content` tokens. Also parses NIM's non-standard `:` comment lines for exact `input_tokens`/`output_tokens`.
+- **Non-SSE responses**: extracts NIM's `usage` field directly. Falls back to `js-tiktoken` estimation (also checks `reasoning_content` for thinking models).
+- **SSE detection**: reads response `content-type` header (not request `Accept`) to correctly handle NIM's streaming responses.
 - **Estimation**: uses `js-tiktoken` with `cl100k_base` encoding when NIM doesn't provide usage data.
 
 Usage is persisted in SQLite (`requests` table) via write-behind buffer and logged at `info` level.

@@ -45,6 +45,8 @@ Toda configuração é feita via variáveis de ambiente:
 | `FLUSH_INTERVAL_MS` | `5000` | Intervalo de descarga do buffer write-behind |
 | `FLUSH_BATCH_SIZE` | `100` | Tamanho do lote para descarga do buffer |
 | `MAX_RPM` | `25` | Requisições por minuto alvo (NIM publica 40, mantemos conservador) |
+| `MAX_TPM` | `350000` | Tokens por minuto alvo (limitador proativo, composto com RPM) |
+| `COMPLETION_BUFFER` | `4096` | Overhead estimado de completion adicionado aos tokens de prompt para verificação TPM |
 | `COOLDOWN_MINUTES` | `60` | Minutos de espera após exaustão de retries 429 |
 | `MAX_CONCURRENCY` | `2` | Máximo de requisições upstream em andamento |
 | `MAX_RETRIES` | `3` | Retries em 429 antes de entrar em cooldown |
@@ -66,22 +68,25 @@ O proxy lê a chave da API do arquivo de autenticação do OpenCode. A entrada d
 
 ## Limitador de Taxa (Throttling)
 
-Quatro camadas previnem violações de rate limit:
+Cinco camadas previnem violações de rate limit:
 
 1. **Janela deslizante (baseada em disparos)** -- Rastreia quando as requisições saem do proxy (não quando completam). `MAX_RPM` requisições por janela de 60 segundos.
 
-2. **Limite de concorrência** -- Máximo de `MAX_CONCURRENCY` requisições upstream em andamento.
+2. **Janela de tokens (TPM)** -- Rastreia uso real de tokens em janela deslizante de 60s. Antes do disparo, o custo estimado (prompt + `COMPLETION_BUFFER`) é verificado contra `MAX_TPM`. Ambas as portas RPM e TPM devem passar.
 
-3. **Espaçamento entre disparos** -- Mínimo de `MIN_DISPATCH_GAP_MS` entre disparos (~2.4s a 25 RPM).
+3. **Limite de concorrência** -- Máximo de `MAX_CONCURRENCY` requisições upstream em andamento.
 
-4. **Retry 429 + cooldown + limite adaptativo** -- Faz retry até `MAX_RETRIES` com backoff exponencial. Se todos falharem, pausa por `COOLDOWN_MINUTES` e decrementa o limite de taxa em 1 (mínimo de 5).
+4. **Espaçamento entre disparos** -- Mínimo de `MIN_DISPATCH_GAP_MS` entre disparos (~2.4s a 25 RPM).
+
+5. **Retry 429 + cooldown + limite adaptativo** -- Faz retry até `MAX_RETRIES` com backoff exponencial. Se todos falharem, pausa por `COOLDOWN_MINUTES` e decrementa o limite de taxa em 1 (mínimo de 5).
 
 ## Rastreamento de Uso de Tokens
 
 O uso de tokens de toda requisição é interceptado e registrado:
 
-- **Respostas não-SSE**: extrai o campo `usage` da NIM diretamente. Faz fallback para estimativa com `js-tiktoken`.
-- **SSE streaming**: `SSETapStream` transparente analisa eventos em trânsito sem buffering.
+- **SSE streaming**: `SSETapStream` transparente analisa eventos em trânsito sem buffering. Conta tokens de `delta.content` e `delta.reasoning_content`. Também analisa as linhas de comentário `:` da NIM para `input_tokens`/`output_tokens` exatos.
+- **Respostas não-SSE**: extrai o campo `usage` da NIM diretamente. Fallback para `js-tiktoken` (também verifica `reasoning_content` para modelos de pensamento).
+- **Detecção SSE**: lê o header `content-type` da resposta (não o `Accept` da requisição) para lidar corretamente com respostas stream da NIM.
 - **Estimativa**: usa `js-tiktoken` com codificação `cl100k_base` quando a NIM não fornece dados de uso.
 
 O uso é persistido em SQLite (tabela `requests`) via buffer write-behind e registrado no nível `info`.
