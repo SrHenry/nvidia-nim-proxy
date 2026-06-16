@@ -1,4 +1,4 @@
-[![pt-BR](https://img.shields.io/badge/lang-pt--BR-green)](README.pt-BR.md)
+> [Ver em pt-BR](README.pt-BR.md)
 
 # NVIDIA NIM Proxy
 
