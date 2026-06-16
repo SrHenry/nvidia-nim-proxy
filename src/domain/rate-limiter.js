@@ -1,4 +1,4 @@
-const INFERENCE_PATHS = ['/v1/chat', '/v1/completions'];
+const INFERENCE_PATHS = ['/chat', '/completions'];
 
 function isInferencePath(path) {
   if (!path) return false;

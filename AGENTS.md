@@ -34,7 +34,7 @@ No build step. Single-file entry (`proxy.mjs` → `src/index.js`). Requires `fas
 - **429 handling**: retries up to 3 times with 20s/40s/60s backoff, then enters 60-min cooldown with adaptive limit decrement (floor of 5). Cooldown persists all per-model TPM state. All configurable via env vars.
 - **Rate-limiter split**: `rate-limiter.js` exports three functions: `createRpmEnforcer` (global RPM + cooldown), `createTpmEnforcer` (per-model TPM + pending tokens), and `createRateLimiter` (composition factory). Factory returns backward-compatible API.
 - **Per-model TPM**: each model gets its own rolling token window. Pending tokens (estimated at dispatch, subtracted on completion, floor 0) are accounted before actual usage, preventing bursts from in-flight requests.
-- **Inference path detection**: TPM enforcer only applies to `/v1/chat/*` and `/v1/completions`. Non-inference paths (e.g. `/v1/models`) only hit RPM enforcer.
+- **Inference path detection**: TPM enforcer only applies to `/v1/chat/*` and `/v1/completions` after `/v1` prefix stripping: actually checks `/chat/*` and `/completions`. Non-inference paths (e.g. `/v1/models` → `/models`) only hit RPM enforcer.
 - **Proportional dispatch gap**: gap = `max(minDispatchGapMs, ceil(estimated * windowMs / maxTpm))`. Larger token costs push dispatches further apart.
 - **Dispatch + token windows**: RPM rolling window (dispatch timestamps) and per-model TPM rolling window compose as an AND gate — both must pass before dispatch.
 - **Token tracking**: every request's token usage is logged and persisted. Uses NIM's meta comment lines (`input_tokens`/`output_tokens`) when available, falls back to `js-tiktoken` estimation. SSE detection reads response `content-type` header.

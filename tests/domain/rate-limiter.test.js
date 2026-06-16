@@ -124,25 +124,25 @@ describe("createRateLimiter (composition)", () => {
   });
 
   it("allows dispatch when under both limits", () => {
-    expect(limiter.canDispatch("m", "/v1/chat/completions", 100)).toBe(true);
+    expect(limiter.canDispatch("m", "/chat/completions", 100)).toBe(true);
   });
 
   it("blocks on RPM when over limit", () => {
     for (let i = 0; i < 10; i++) {
-      limiter.recordDispatch("m", "/v1/chat/completions", 10);
+      limiter.recordDispatch("m", "/chat/completions", 10);
     }
-    expect(limiter.canDispatch("m", "/v1/chat/completions", 10)).toBe(false);
+    expect(limiter.canDispatch("m", "/chat/completions", 10)).toBe(false);
   });
 
   it("blocks on TPM when over limit", () => {
-    limiter.recordDispatch("m", "/v1/chat/completions", 950);
-    limiter.recordCompletion("m", "/v1/chat/completions");
+    limiter.recordDispatch("m", "/chat/completions", 950);
+    limiter.recordCompletion("m", "/chat/completions");
     limiter.recordTokenUsage("m", 950);
-    expect(limiter.canDispatch("m", "/v1/chat/completions", 100)).toBe(false);
+    expect(limiter.canDispatch("m", "/chat/completions", 100)).toBe(false);
   });
 
   it("skips TPM check for non-inference paths", () => {
-    expect(limiter.canDispatch("m", "/v1/models", 999999)).toBe(true);
+    expect(limiter.canDispatch("m", "/models", 999999)).toBe(true);
   });
 
   it("records token usage per model", () => {
