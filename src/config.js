@@ -63,7 +63,7 @@ export default Object.freeze({
       injection: {
         chat_template_kwargs: { enable_thinking: true },
       },
-      config: {
+      override: {
         maxTpm: 250_000,
         completionBuffer: 15_000,
       },

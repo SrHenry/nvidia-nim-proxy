@@ -6,7 +6,7 @@ function makeConfig(overrides = []) {
     maxTpm: 250000,
     maxConcurrency: 2,
     cooldownMs: 3600000,
-    models: overrides.map(o => ({ pattern: new RegExp(o.pattern, 'i'), config: o.config })),
+    models: overrides.map(o => ({ pattern: new RegExp(o.pattern, 'i'), override: o.config })),
   };
 }
 

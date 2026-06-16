@@ -1,7 +1,7 @@
 export function createModelConfigResolver(globalConfig) {
   const overrides = (globalConfig.models || []).map(m => ({
     pattern: m.pattern,
-    overrides: m.config || {},
+    overrides: m.override || {},
   }));
 
   function resolve(model, key) {
