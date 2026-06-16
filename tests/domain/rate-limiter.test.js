@@ -145,6 +145,67 @@ describe("createTpmEnforcer with per-model maxTpm", () => {
   });
 });
 
+describe("createRpmEnforcer with per-model cooldown", () => {
+  let rpm;
+  const resolver = {
+    resolve: (model, key) => {
+      if (model === "glm-5.1" && key === "cooldownMs") return 10000;
+      return 600000;
+    },
+    getMatchedOverrides: (model) => {
+      if (model === "glm-5.1") return { cooldownMs: 10000 };
+      return null;
+    },
+  };
+
+  beforeEach(() => {
+    rpm = createRpmEnforcer({ windowMs: 60_000, maxRpm: 10, cooldownMs: 600000 }, resolver);
+  });
+
+  it("global cooldown blocks all models", () => {
+    rpm.enterCooldown("unknown");
+    expect(rpm.canDispatch("unknown")).toBe(false);
+    expect(rpm.canDispatch("glm-5.1")).toBe(false);
+  });
+
+  it("per-model cooldown only blocks that model", () => {
+    rpm.enterCooldown("glm-5.1");
+    expect(rpm.canDispatch("glm-5.1")).toBe(false);
+    expect(rpm.canDispatch("other")).toBe(true);
+  });
+
+  it("per-model cooldown does not decrement adaptiveLimit", () => {
+    const before = rpm.getState().adaptiveLimit;
+    rpm.enterCooldown("glm-5.1");
+    expect(rpm.getState().adaptiveLimit).toBe(before);
+  });
+
+  it("global cooldown decrements adaptiveLimit", () => {
+    const before = rpm.getState().adaptiveLimit;
+    rpm.enterCooldown("other");
+    expect(rpm.getState().adaptiveLimit).toBe(before - 1);
+  });
+
+  it("per-model cooldown timeUntilDispatchAllowed returns per-model wait", () => {
+    rpm.enterCooldown("glm-5.1");
+    const glmWait = rpm.timeUntilDispatchAllowed("glm-5.1");
+    const otherWait = rpm.timeUntilDispatchAllowed("other");
+    expect(glmWait).toBeGreaterThan(0);
+    expect(otherWait).toBe(0);
+  });
+
+  it("persists and restores modelCooldowns in getState/loadState", () => {
+    rpm.enterCooldown("glm-5.1");
+    const state = rpm.getState();
+    expect(state.modelCooldowns["glm-5.1"]).toBeGreaterThan(0);
+
+    const rpm2 = createRpmEnforcer({ windowMs: 60_000, maxRpm: 10, cooldownMs: 600000 }, resolver);
+    rpm2.loadState(state);
+    expect(rpm2.canDispatch("glm-5.1")).toBe(false);
+    expect(rpm2.canDispatch("other")).toBe(true);
+  });
+});
+
 describe("createRateLimiter (composition)", () => {
   let limiter;
 

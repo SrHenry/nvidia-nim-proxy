@@ -5,13 +5,24 @@ function isInferencePath(path) {
   return INFERENCE_PATHS.some(p => path.startsWith(p));
 }
 
-export function createRpmEnforcer(config) {
+export function createRpmEnforcer(config, resolveModelConfig) {
+  const resolve = resolveModelConfig || { resolve: (m, k) => config[k], getMatchedOverrides: () => null };
   const state = {
     dispatchTimestamps: [],
     completionTimestamps: [],
     cooldownUntil: 0,
     adaptiveLimit: config.maxRpm,
+    modelCooldowns: {},
   };
+
+  function getCooldownForModel(model) {
+    const overrides = resolve.getMatchedOverrides(model);
+    const hasOverride = overrides && 'cooldownMs' in overrides;
+    if (hasOverride && state.modelCooldowns[model]) {
+      return state.modelCooldowns[model];
+    }
+    return state.cooldownUntil;
+  }
 
   function now() {
     return Date.now();
@@ -28,22 +39,19 @@ export function createRpmEnforcer(config) {
     return state.dispatchTimestamps.length;
   }
 
-  function canDispatch() {
-    if (state.cooldownUntil > now()) return false;
+  function canDispatch(model) {
+    if (getCooldownForModel(model) > now()) return false;
     pruneWindows();
     return currentUsage() < state.adaptiveLimit;
   }
 
-  function timeUntilDispatchAllowed() {
-    const currentTime = now();
-    if (state.cooldownUntil > currentTime) {
-      return Math.min(state.cooldownUntil - currentTime, 5000);
-    }
+  function timeUntilDispatchAllowed(model) {
+    const cd = getCooldownForModel(model);
+    if (cd > now()) return Math.min(cd - now(), 5000);
     pruneWindows();
     if (currentUsage() >= state.adaptiveLimit) {
-      const oldest = state.dispatchTimestamps[0];
-      const rpmWait = oldest + config.windowMs - currentTime;
-      return rpmWait > 0 ? rpmWait : 0;
+      const wait = state.dispatchTimestamps[0] + config.windowMs - now();
+      return wait > 0 ? wait : 0;
     }
     return 0;
   }
@@ -56,30 +64,32 @@ export function createRpmEnforcer(config) {
     state.completionTimestamps.push(now());
   }
 
-  function enterCooldown() {
-    state.cooldownUntil = now() + config.cooldownMs;
-    if (state.adaptiveLimit > 5) {
-      state.adaptiveLimit--;
+  function enterCooldown(model) {
+    const overrides = resolve.getMatchedOverrides(model);
+    const hasOverride = overrides && 'cooldownMs' in overrides;
+    if (hasOverride) {
+      state.modelCooldowns[model] = now() + overrides.cooldownMs;
+    } else {
+      state.cooldownUntil = now() + config.cooldownMs;
+      if (state.adaptiveLimit > 5) state.adaptiveLimit--;
     }
   }
 
   function getState() {
-    return state;
+    return {
+      ...state,
+      dispatchTimestamps: [...state.dispatchTimestamps],
+      completionTimestamps: [...state.completionTimestamps],
+      modelCooldowns: { ...state.modelCooldowns },
+    };
   }
 
   function loadState(loaded) {
-    if (loaded.dispatchTimestamps) {
-      state.dispatchTimestamps = loaded.dispatchTimestamps;
-    }
-    if (loaded.completionTimestamps) {
-      state.completionTimestamps = loaded.completionTimestamps;
-    }
-    if (loaded.cooldownUntil) {
-      state.cooldownUntil = loaded.cooldownUntil;
-    }
-    if (loaded.adaptiveLimit != null) {
-      state.adaptiveLimit = loaded.adaptiveLimit;
-    }
+    if (loaded.dispatchTimestamps) state.dispatchTimestamps = loaded.dispatchTimestamps;
+    if (loaded.completionTimestamps) state.completionTimestamps = loaded.completionTimestamps;
+    if (loaded.cooldownUntil) state.cooldownUntil = loaded.cooldownUntil;
+    if (loaded.adaptiveLimit != null) state.adaptiveLimit = loaded.adaptiveLimit;
+    if (loaded.modelCooldowns) state.modelCooldowns = loaded.modelCooldowns;
     pruneWindows();
   }
 
@@ -197,12 +207,12 @@ export function createTpmEnforcer(config, resolveModelConfig) {
   };
 }
 
-export function createRateLimiter(config) {
-  const rpm = createRpmEnforcer(config);
-  const tpm = createTpmEnforcer(config);
+export function createRateLimiter(config, resolveModelConfig) {
+  const rpm = createRpmEnforcer(config, resolveModelConfig);
+  const tpm = createTpmEnforcer(config, resolveModelConfig);
 
   function canDispatch(model, path, estimatedTokens = 0) {
-    if (!rpm.canDispatch()) return false;
+    if (!rpm.canDispatch(model)) return false;
     if (isInferencePath(path)) {
       return tpm.canDispatchForModel(model, estimatedTokens);
     }
@@ -210,19 +220,15 @@ export function createRateLimiter(config) {
   }
 
   function timeUntilDispatchAllowed(model, path, estimatedTokens = 0) {
-    const rpmWait = rpm.timeUntilDispatchAllowed();
-    let tpmWait = 0;
-    if (isInferencePath(path)) {
-      tpmWait = tpm.timeUntilModelAllowed(model, estimatedTokens);
-    }
-    return Math.max(rpmWait, tpmWait);
+    return Math.max(
+      rpm.timeUntilDispatchAllowed(model),
+      isInferencePath(path) ? tpm.timeUntilModelAllowed(model, estimatedTokens) : 0
+    );
   }
 
   function recordDispatch(model, path, estimatedTokens = 0) {
     rpm.recordDispatch();
-    if (isInferencePath(path)) {
-      tpm.reserveTokens(model, estimatedTokens);
-    }
+    if (isInferencePath(path)) tpm.reserveTokens(model, estimatedTokens);
   }
 
   function recordCompletion(model, path) {
@@ -233,8 +239,8 @@ export function createRateLimiter(config) {
     tpm.recordTokenUsage(model, tokens);
   }
 
-  function enterCooldown() {
-    rpm.enterCooldown();
+  function enterCooldown(model) {
+    rpm.enterCooldown(model);
   }
 
   function getState() {
