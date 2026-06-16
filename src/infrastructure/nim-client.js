@@ -97,7 +97,7 @@ export function createNimClient(config, authLoader, modelInjector, logger) {
       status: lastResponse.status,
       headers: filterHeaders(lastResponse.headers),
       body: lastResponse.body,
-      isSSE: (headers.accept ?? "").includes("text/event-stream"),
+      isSSE: (lastResponse.headers.get("content-type") ?? "").includes("text/event-stream"),
     };
   }
 

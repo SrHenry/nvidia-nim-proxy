@@ -3,6 +3,7 @@ import { Transform } from "node:stream";
 export function createSSETapStream(model, body, tokenizer, tokenTracker) {
   let lineBuffer = "";
   let usage = null;
+  let usageFromMeta = null;
   let contentTokens = 0;
 
   const tap = new Transform({
@@ -14,27 +15,40 @@ export function createSSETapStream(model, body, tokenizer, tokenTracker) {
       lineBuffer = lines.pop() || "";
 
       for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") continue;
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") continue;
 
-        try {
-          const parsed = JSON.parse(data);
+          try {
+            const parsed = JSON.parse(data);
 
-          if (parsed.usage) {
-            usage = parsed.usage;
-          }
+            if (parsed.usage) {
+              usage = parsed.usage;
+            }
 
-          if (parsed.choices) {
-            for (const choice of parsed.choices) {
-              const content = choice?.delta?.content || "";
-              if (content) {
-                contentTokens += tokenizer.estimateTokens(content);
+            if (parsed.choices) {
+              for (const choice of parsed.choices) {
+                const content = choice?.delta?.content || choice?.delta?.reasoning_content || "";
+                if (content) {
+                  contentTokens += tokenizer.estimateTokens(content);
+                }
               }
             }
+          } catch {
+            // not JSON, skip
           }
-        } catch {
-          // not JSON, skip
+        } else if (line.startsWith(": ")) {
+          const meta = line.slice(2).trim();
+          if (meta) {
+            try {
+              const parsed = JSON.parse(meta);
+              if (parsed.input_tokens != null || parsed.output_tokens != null) {
+                usageFromMeta = parsed;
+              }
+            } catch {
+              // not JSON, skip
+            }
+          }
         }
       }
 
@@ -51,6 +65,18 @@ export function createSSETapStream(model, body, tokenizer, tokenTracker) {
               const parsed = JSON.parse(data);
               if (parsed.usage) {
                 usage = parsed.usage;
+              }
+            } catch {
+              // ignore
+            }
+          }
+        } else if (line.startsWith(": ")) {
+          const meta = line.slice(2).trim();
+          if (meta) {
+            try {
+              const parsed = JSON.parse(meta);
+              if (parsed.input_tokens != null || parsed.output_tokens != null) {
+                usageFromMeta = parsed;
               }
             } catch {
               // ignore
@@ -78,11 +104,22 @@ export function createSSETapStream(model, body, tokenizer, tokenTracker) {
         }
       }
 
+      if (source === "estimated" && usageFromMeta) {
+        if (usageFromMeta.input_tokens != null) {
+          promptTokens = usageFromMeta.input_tokens;
+          source = "nim";
+        }
+        if (usageFromMeta.output_tokens != null) {
+          completionTokens = usageFromMeta.output_tokens;
+          source = "nim";
+        }
+      }
+
       if (source === "estimated") {
         completionTokens = contentTokens;
       }
 
-      tokenTracker.record(model, promptTokens, completionTokens, source);
+      this.finalTokens = { promptTokens, completionTokens, source };
 
       cb();
     },

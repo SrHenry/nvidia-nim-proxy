@@ -81,7 +81,8 @@ export function createTokenTracker(tokenizer, rateLimiter, logger) {
     if (completionTokens === 0 && responseBody?.choices) {
       for (const choice of responseBody.choices) {
         const content =
-          choice?.message?.content || choice?.delta?.content || "";
+          choice?.message?.content || choice?.delta?.content ||
+          choice?.message?.reasoning_content || choice?.delta?.reasoning_content || "";
         if (content) {
           completionTokens += tokenizer.estimateTokens(content);
         }

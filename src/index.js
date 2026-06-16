@@ -73,7 +73,7 @@ async function processJob(job) {
       nodeStream.pipe(tap).pipe(reply.raw);
       tap.on("end", () => {
         const { promptTokens, completionTokens, source } =
-          tokenTracker.estimateFromResponse(model, body, null);
+          tap.finalTokens || tokenTracker.estimateFromResponse(model, body, null);
         const totalTokens = promptTokens + completionTokens;
         tokenTracker.record(model, promptTokens, completionTokens, source);
         requestsRepo.insert({
