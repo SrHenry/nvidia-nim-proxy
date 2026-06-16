@@ -254,6 +254,14 @@ export function createRateLimiter(config) {
     return tpm.currentTokenUsage(model);
   }
 
+  function getAllModelStates() {
+    return tpm.getAllModelStates();
+  }
+
+  function loadModelStates(states) {
+    tpm.loadModelStates(states);
+  }
+
   return {
     canDispatch,
     timeUntilDispatchAllowed,
@@ -265,5 +273,7 @@ export function createRateLimiter(config) {
     loadState,
     currentUsage,
     currentTokenUsage,
+    getAllModelStates,
+    loadModelStates,
   };
 }

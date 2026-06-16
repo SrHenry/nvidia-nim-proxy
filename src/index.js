@@ -42,6 +42,18 @@ if (loadedState) {
   });
 }
 
+const modelStates = throttleRepo.getAllModelStates();
+if (modelStates.length > 0) {
+  const stateObj = {};
+  for (const ms of modelStates) {
+    stateObj[ms.model] = {
+      tokenTimestamps: ms.tokenTimestamps,
+      pendingTokens: ms.pendingTokens,
+    };
+  }
+  rateLimiter.loadState({ modelStates: stateObj });
+}
+
 await maybeMigrateFromJson(config.stateFile, requestsRepo, throttleRepo);
 
 async function processJob(job) {
@@ -76,7 +88,7 @@ async function processJob(job) {
           tap.finalTokens || tokenTracker.estimateFromResponse(model, body, null);
         const totalTokens = promptTokens + completionTokens;
         tokenTracker.record(model, promptTokens, completionTokens, source);
-        rateLimiter.recordTokenUsage(totalTokens);
+        rateLimiter.recordTokenUsage(model, totalTokens);
         requestsRepo.insert({
           model,
           statusCode,
@@ -114,7 +126,7 @@ async function processJob(job) {
       }
 
       tokenTracker.record(model, promptTokens, completionTokens, tokenSource);
-      rateLimiter.recordTokenUsage(promptTokens + completionTokens);
+      rateLimiter.recordTokenUsage(model, promptTokens + completionTokens);
       requestsRepo.insert({
         model,
         statusCode,
@@ -144,6 +156,7 @@ async function processJob(job) {
         adaptiveLimit: state.adaptiveLimit,
         cooldownUntil: state.cooldownUntil,
       });
+      throttleRepo.saveAllModelStates(rateLimiter.getAllModelStates());
       const summary = tokenTracker.getSummary();
       throttleRepo.insertEvent({
         type: "cooldown_enter",
