@@ -72,13 +72,13 @@ Cinco camadas previnem violações de rate limit:
 
 1. **Janela deslizante (baseada em disparos)** -- Rastreia quando as requisições saem do proxy (não quando completam). `MAX_RPM` requisições por janela de 60 segundos.
 
-2. **Janela de tokens (TPM)** -- Rastreia uso real de tokens em janela deslizante de 60s. Antes do disparo, o custo estimado (prompt + `COMPLETION_BUFFER`) é verificado contra `MAX_TPM`. Ambas as portas RPM e TPM devem passar.
+2. **Janela de tokens (TPM, por modelo)** -- Cada modelo tem sua própria janela deslizante de 60s. Antes do disparo, o custo estimado (prompt + `COMPLETION_BUFFER`) mais tokens pendentes em voo é verificado contra `MAX_TPM`. Ambas as portas RPM e TPM por modelo devem passar. Rotas não-inference (ex.: `/v1/models`) pulam a verificação TPM. Tokens pendentes são reduzidos na conclusão (mínimo 0).
 
 3. **Limite de concorrência** -- Máximo de `MAX_CONCURRENCY` requisições upstream em andamento.
 
-4. **Espaçamento entre disparos** -- Mínimo de `MIN_DISPATCH_GAP_MS` entre disparos (~2.4s a 25 RPM).
+4. **Espaçamento entre disparos (proporcional a tokens)** -- Gap mínimo calculado como `max(MIN_DISPATCH_GAP_MS, ceil(estimado * 60000 / MAX_TPM))`. Custos maiores de tokens espaçam mais os disparos.
 
-5. **Retry 429 + cooldown + limite adaptativo** -- Faz retry até `MAX_RETRIES` com backoff exponencial. Se todos falharem, pausa por `COOLDOWN_MINUTES` e decrementa o limite de taxa em 1 (mínimo de 5).
+5. **Retry 429 + cooldown + limite adaptativo** -- Faz retry até `MAX_RETRIES` com backoff exponencial. Se todos falharem, pausa por `COOLDOWN_MINUTES`, decrementa o limite em 1 (mínimo 5) e persiste todo o estado TPM por modelo.
 
 ## Rastreamento de Uso de Tokens
 
@@ -107,6 +107,22 @@ thinkingModels: [
   },
 ],
 ```
+
+## Migrações de Schema
+
+Mudanças no schema do banco são gerenciadas via arquivos de migração timestamped em `migrations/`:
+
+```bash
+npm run migrate                        # aplicar todas pendentes
+npm run migrate -- --dry-run           # pré-visualizar
+npm run migrate -- 3                   # aplicar próximas 3
+npm run migrate -- --rollback          # reverter última
+npm run migrate -- --rollback 2 --dry-run  # pré-visualizar reversão de 2
+npm run migration create "add widgets"  # criar nova migração
+npm run migration status               # mostrar aplicadas/pendentes
+```
+
+Migrações NÃO auto-executam na inicialização — execute `npm run migrate` manualmente após implantar novo código.
 
 ## Arquitetura
 

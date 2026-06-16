@@ -74,13 +74,13 @@ Five layers prevent rate limit violations:
 
 1. **Rolling window (dispatch-based)** -- Tracks when requests leave the proxy (not when they complete). `MAX_RPM` requests per 60-second window.
 
-2. **Token window (TPM)** -- Tracks actual token usage in a 60-second rolling window. Before dispatch, estimated token cost (prompt + `COMPLETION_BUFFER`) is checked against `MAX_TPM`. Both RPM and TPM gates must pass.
+2. **Token window (TPM, per-model)** -- Each model gets its own 60-second rolling token window. Before dispatch, estimated token cost (prompt + `COMPLETION_BUFFER`) plus in-flight pending tokens is checked against `MAX_TPM`. Both RPM and per-model TPM gates must pass. Non-inference paths (e.g. `/v1/models`) skip the TPM check. Pending tokens are reduced on completion (floor 0).
 
 3. **Concurrency cap** -- Max `MAX_CONCURRENCY` in-flight upstream requests.
 
-4. **Dispatch gap** -- Minimum `MIN_DISPATCH_GAP_MS` between dispatches (~2.4s at 25 RPM).
+4. **Dispatch gap (token-proportional)** -- Minimum gap between dispatches calculated as `max(MIN_DISPATCH_GAP_MS, ceil(estimated * 60000 / MAX_TPM))`. Larger token costs push dispatches further apart.
 
-5. **429 retry + cooldown + adaptive limiting** -- Retries up to `MAX_RETRIES` with exponential backoff. If all fail, halts for `COOLDOWN_MINUTES` and decrements the rate limit by 1 (floor of 5).
+5. **429 retry + cooldown + adaptive limiting** -- Retries up to `MAX_RETRIES` with exponential backoff. If all fail, halts for `COOLDOWN_MINUTES`, decrements the rate limit by 1 (floor of 5), and persists all per-model TPM state.
 
 ## Token Usage Tracking
 
@@ -109,6 +109,22 @@ thinkingModels: [
   },
 ],
 ```
+
+## Schema Migrations
+
+Database schema changes are managed via timestamped migration files in `migrations/`:
+
+```bash
+npm run migrate                        # apply all pending
+npm run migrate -- --dry-run           # preview only
+npm run migrate -- 3                   # apply next 3
+npm run migrate -- --rollback          # revert last
+npm run migrate -- --rollback 2 --dry-run  # preview revert of 2
+npm run migration create "add widgets"  # create new migration
+npm run migration status               # show applied/pending
+```
+
+Migrations do NOT auto-run on startup — run `npm run migrate` manually after deploying new code.
 
 ## Architecture
 
