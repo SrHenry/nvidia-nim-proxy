@@ -33,8 +33,10 @@ export function createNimClient(config, authLoader, modelInjector, logger, resol
     const contentType = headers["content-type"] ?? "application/json";
 
     const model = body?.model;
-    const maxRetries = rmc.resolve(model, 'maxRetries');
-    const retryDelays = rmc.resolve(model, 'retryDelays');
+    const maxRetries = Math.max(0, Math.floor(rmc.resolve(model, 'maxRetries')));
+    const retryDelays = Array.isArray(rmc.resolve(model, 'retryDelays'))
+      ? rmc.resolve(model, 'retryDelays')
+      : config.retryDelays;
 
     let lastResponse = null;
 
