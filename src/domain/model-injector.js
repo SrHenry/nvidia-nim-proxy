@@ -2,8 +2,8 @@ export function createModelInjector(config) {
   function patch(model, body) {
     if (!body || typeof body !== "object") return body;
 
-    for (const rule of config.thinkingModels) {
-      if (rule.pattern.test(model)) {
+    for (const rule of config.models) {
+      if (rule.pattern.test(model) && rule.injection) {
         return {
           ...body,
           chat_template_kwargs: {
@@ -19,7 +19,7 @@ export function createModelInjector(config) {
 
   function getMatchedRule(model) {
     if (!model || typeof model !== "string") return null;
-    for (const rule of config.thinkingModels) {
+    for (const rule of config.models) {
       if (rule.pattern.test(model)) {
         return rule.pattern.source;
       }

@@ -6,7 +6,7 @@ describe("createModelInjector", () => {
 
   beforeEach(() => {
     injector = createModelInjector({
-      thinkingModels: [
+      models: [
         {
           pattern: /^z-ai\/glm-?5\.?1/i,
           injection: {

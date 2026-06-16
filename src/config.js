@@ -57,11 +57,15 @@ export default Object.freeze({
     "MIN_DISPATCH_GAP_MS",
     Math.floor(60_000 / maxRpm)
   ),
-  thinkingModels: [
+  models: [
     {
       pattern: /^z-ai\/glm-?5\.?1/i,
       injection: {
         chat_template_kwargs: { enable_thinking: true },
+      },
+      config: {
+        maxTpm: 250_000,
+        completionBuffer: 15_000,
       },
     },
     {
@@ -71,5 +75,4 @@ export default Object.freeze({
       },
     },
   ],
-  models: [],
 });
