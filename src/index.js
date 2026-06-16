@@ -24,7 +24,7 @@ const rateLimiter = createRateLimiter(config);
 const tokenTracker = createTokenTracker(tokenizer, rateLimiter, null);
 
 const db = new Database(config.dbPath);
-await db.migrate();
+db.ensureInfrastructure();
 const snowflake = createSnowflakeGenerator({ workerId: config.snowflakeWorkerId });
 
 const realRequestsRepo = new RequestsRepository(db, snowflake);
