@@ -46,7 +46,7 @@ Toda configuração é feita via variáveis de ambiente:
 | `FLUSH_BATCH_SIZE` | `100` | Tamanho do lote para descarga do buffer |
 | `MAX_RPM` | `25` | Requisições por minuto alvo (NIM publica 40, mantemos conservador) |
 | `MAX_TPM` | `250000` | Tokens por minuto alvo (limitador proativo, composto com RPM) |
-| `COMPLETION_BUFFER` | `4096` | Overhead estimado de completion adicionado aos tokens de prompt para verificação TPM |
+| `COMPLETION_BUFFER` | `48000` | Overhead de completion somado aos tokens de prompt para verificação TPM (alto para modelos de pensamento com saída reasoning extensa) |
 | `COOLDOWN_MINUTES` | `60` | Minutos de espera após exaustão de retries 429 |
 | `MAX_CONCURRENCY` | `2` | Máximo de requisições upstream em andamento |
 | `MAX_RETRIES` | `3` | Retries em 429 antes de entrar em cooldown |

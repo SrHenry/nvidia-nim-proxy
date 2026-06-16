@@ -25,7 +25,7 @@ function envCsv(key, fallback) {
 
 const maxRpm = envNumber("MAX_RPM", 25);
 const maxTpm = envNumber("MAX_TPM", 250_000);
-const completionBuffer = envNumber("COMPLETION_BUFFER", 4096);
+const completionBuffer = envNumber("COMPLETION_BUFFER", 48000);
 const cooldownMinutes = envNumber("COOLDOWN_MINUTES", 60);
 const dbRetentionDays = envNumber("DB_RETENTION_DAYS", 365);
 const snowflakeWorkerId = envNumber("SNOWFLAKE_WORKER_ID", 0);

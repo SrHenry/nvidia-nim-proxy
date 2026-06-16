@@ -48,7 +48,7 @@ All configuration is via environment variables:
 | `FLUSH_BATCH_SIZE` | `100` | Write-behind buffer batch size trigger |
 | `MAX_RPM` | `25` | Target requests per minute (NIM publishes 40, we stay conservative) |
 | `MAX_TPM` | `250000` | Target tokens per minute (proactive throttle, composes with RPM) |
-| `COMPLETION_BUFFER` | `4096` | Estimated completion overhead added to prompt tokens for TPM check |
+| `COMPLETION_BUFFER` | `48000` | Completion overhead added to prompt tokens for TPM check (high for thinking models with large reasoning output) |
 | `COOLDOWN_MINUTES` | `60` | Minutes to wait after exhausted 429 retries |
 | `MAX_CONCURRENCY` | `2` | Max in-flight upstream requests |
 | `MAX_RETRIES` | `3` | Retries on 429 before entering cooldown |
