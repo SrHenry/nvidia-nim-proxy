@@ -29,12 +29,6 @@ export function createScheduler(config, rateLimiter, processJob, estimateJobToke
 
     while (running) {
       try {
-        const cooldownWait = rateLimiter.timeUntilDispatchAllowed();
-        if (cooldownWait > 0) {
-          await sleep(cooldownWait);
-          continue;
-        }
-
         if (queue.length === 0) {
           await sleep(50);
           continue;
@@ -45,28 +39,41 @@ export function createScheduler(config, rateLimiter, processJob, estimateJobToke
           continue;
         }
 
-        const estimated = estimateJobTokens ? estimateJobTokens(queue[0].body) : 0;
+        const job = queue[0];
+        const model = job.body?.model || 'unknown';
+        const path = job.upstreamPath || '';
+        const estimated = estimateJobTokens ? estimateJobTokens(job.body) : 0;
 
-        if (!rateLimiter.canDispatch(estimated)) {
-          const wait = rateLimiter.timeUntilDispatchAllowed(estimated);
+        const cooldownWait = rateLimiter.timeUntilDispatchAllowed(model, path, estimated);
+        if (cooldownWait > 0) {
+          await sleep(cooldownWait);
+          continue;
+        }
+
+        if (!rateLimiter.canDispatch(model, path, estimated)) {
+          const wait = rateLimiter.timeUntilDispatchAllowed(model, path, estimated);
           if (wait > 0) await sleep(wait);
           continue;
         }
 
+        const gap = Math.max(
+          config.minDispatchGapMs,
+          Math.ceil(estimated * config.windowMs / Math.max(config.maxTpm, 1))
+        );
         const sinceLastDispatch = now() - lastDispatchAt;
-        if (sinceLastDispatch < config.minDispatchGapMs) {
-          await sleep(config.minDispatchGapMs - sinceLastDispatch);
+        if (sinceLastDispatch < gap) {
+          await sleep(gap - sinceLastDispatch);
         }
 
-        const job = queue.shift();
+        queue.shift();
         active++;
         lastDispatchAt = now();
-        rateLimiter.recordDispatch();
+        rateLimiter.recordDispatch(model, path, estimated);
 
         processJob(job)
           .catch((err) => job.reject(err))
           .finally(() => {
-            rateLimiter.recordCompletion();
+            rateLimiter.recordCompletion(model, path);
             active--;
           });
       } catch (err) {
