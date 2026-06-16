@@ -44,4 +44,4 @@ Provider config in `opencode.json` uses `@ai-sdk/openai-compatible` with `baseUR
 
 ## Documentation
 
-When changing behavior, constants, or architecture in `src/`, update `AGENTS.md`, `ARCHITECTURE.md`, and `README.md` to match. These files are the source of truth for how the proxy works.
+When changing behavior, constants, or architecture in `src/`, update `AGENTS.md`, `ARCHITECTURE.md`, `ARCHITECTURE.pt-BR.md`, `README.md`, and `README.pt-BR.md` to match. These files are the source of truth for how the proxy works.

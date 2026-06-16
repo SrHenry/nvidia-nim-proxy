@@ -1,4 +1,6 @@
-# oc-proxy
+[![pt-BR](https://img.shields.io/badge/lang-pt--BR-green)](README.pt-BR.md)
+
+# NVIDIA NIM Proxy
 
 A reverse proxy that serializes and throttles OpenCode requests to the NVIDIA NIM API, tracks token usage, and retries on rate limits.
 
