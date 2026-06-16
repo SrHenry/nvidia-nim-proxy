@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node proxy.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "migration": "node runners/migration.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
