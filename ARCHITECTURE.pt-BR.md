@@ -123,6 +123,32 @@ Mudanças de schema são gerenciadas via arquivos de migração timestamped em `
 
 A poda TTL é executada a cada hora; retenção configurada via `DB_RETENTION_DAYS`.
 
+## Configuração por Modelo
+
+Diferentes modelos upstream possuem diferentes rate limits, necessidades de concorrência e tolerância a retry. O proxy suporta overrides por modelo via um array `models` na config.
+
+### Resolvedor de Configuração por Modelo
+
+`createModelConfigResolver(globalConfig)` retorna `{ resolve(model, key), getMatchedOverrides(model) }`.
+
+- `resolve(model, key)` — retorna o valor do override se o modelo corresponder a um padrão, senão o global padrão
+- `getMatchedOverrides(model)` — retorna o objeto de override completo se corresponder, senão null
+
+Primeiro padrão correspondente vence. O resolvedor é threaded através de:
+- **Enforcer TPM do rate-limiter**: `maxTpm` dinâmico por modelo
+- **Enforcer RPM do rate-limiter**: cooldown por modelo (modelos com override `cooldownMs` entram em cooldown independente)
+- **Scheduler**: `maxConcurrency`, `minDispatchGapMs`, `maxTpm` por modelo para cálculo de gap
+- **NIM client**: `maxRetries`, `retryDelays` por modelo
+- **Index.js**: `completionBuffer` por modelo em `estimateJobTokens`
+
+### Semântica de Cooldown
+
+| Cenário | Comportamento | adaptiveLimit |
+|---------|---------------|---------------|
+| Sem override, 429 esgotado | Cooldown global, tudo para | Decrementado (mínimo 5) |
+| Com override cooldownMs | Apenas esse modelo entra em cooldown | NÃO decrementado |
+| Ambos ativos | Modelo passa apenas se AMBOS expiraram (porta AND) | N/A |
+
 ## Configuração
 
 Todas as constantes configuráveis via env vars. Consulte README.pt-BR.md para a lista completa.

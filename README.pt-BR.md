@@ -91,6 +91,21 @@ O uso de tokens de toda requisição é interceptado e registrado:
 
 O uso é persistido em SQLite (tabela `requests`) via buffer write-behind e registrado no nível `info`.
 
+## Configuração por Modelo
+
+O array `models` em `src/config.js` permite sobrescrever configurações de rate limit e retry por modelo:
+
+```js
+models: [
+  {
+    pattern: /^nvidia\/llama-3\.3/i,
+    config: { maxTpm: 100000, maxConcurrency: 3, cooldownMs: 30000 },
+  },
+],
+```
+
+Overrides suportados: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`. Primeiro padrão correspondente vence.
+
 ## Injeção de Modelo
 
 Configurável via array `thinkingModels` em `src/config.js`. Adicione novos modelos com uma regra:

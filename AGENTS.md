@@ -16,7 +16,7 @@ No build step. Single-file entry (`proxy.mjs` → `src/index.js`). Requires `fas
 - `proxy.mjs` — thin entry wrapper, imports `src/index.js`
 - `src/index.js` — composition root: wires all dependencies
 - `src/config.js` — frozen config object from env vars
-- `src/domain/` — pure business logic (rate-limiter, token-tracker, model-injector, scheduler)
+- `src/domain/` — pure business logic (rate-limiter, token-tracker, model-injector, model-config-resolver, scheduler)
 - `src/infrastructure/` — external concerns (database, auth-loader, nim-client, tokenizer)
 - `src/presentation/` — Fastify-specific (routes, sse-tap, server)
 - `runners/` — CLI entry points (migrate, migration, migrate-utils)
@@ -31,6 +31,9 @@ No build step. Single-file entry (`proxy.mjs` → `src/index.js`). Requires `fas
 - **Fastify v5**: `reply.sent` is read-only. Proxy uses `reply.hijack()` + `reply.raw.writeHead()` / `.pipe()` to bypass Fastify reply lifecycle. Don't try to set `reply.sent` directly.
 - **Auth file**: reads API key from `~/.local/share/opencode/auth.json` under provider key matching `PROVIDER` env var (default `nvidia`). The auth entry must have `type: "api"` and a `key` field.
 - **Model injection**: config-driven via `thinkingModels` array in `src/config.js`. Add new models by adding a rule — zero code changes.
+- **Per-model config overrides**: `models` array in config.js allows overriding `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays` per model. Use `pattern` regex and `config` object. First matching pattern wins. Resolver threaded through rate-limiter, scheduler, NIM client, and index.js.
+- **Per-model cooldown**: Models with `cooldownMs` override enter independent cooldown. Other models unaffected. `adaptiveLimit` only decrements on global cooldown (no override). Global + per-model cooldowns are AND-gated.
+- **V3 migration**: Adds `model_cooldowns` TEXT JSON column to `throttle_state`. Stores per-model cooldown timestamps.
 - **429 handling**: retries up to 3 times with 20s/40s/60s backoff, then enters 60-min cooldown with adaptive limit decrement (floor of 5). Cooldown persists all per-model TPM state. All configurable via env vars.
 - **Rate-limiter split**: `rate-limiter.js` exports three functions: `createRpmEnforcer` (global RPM + cooldown), `createTpmEnforcer` (per-model TPM + pending tokens), and `createRateLimiter` (composition factory). Factory returns backward-compatible API.
 - **Per-model TPM**: each model gets its own rolling token window. Pending tokens (estimated at dispatch, subtracted on completion, floor 0) are accounted before actual usage, preventing bursts from in-flight requests.

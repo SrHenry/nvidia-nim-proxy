@@ -123,6 +123,32 @@ Schema changes are managed via timestamped migration files in `migrations/`. App
 
 TTL pruning runs every hour; retention configured via `DB_RETENTION_DAYS`.
 
+## Per-Model Config Overrides
+
+Different upstream models have different rate limits, concurrency needs, and retry tolerance. The proxy supports per-model overrides via a `models` config array.
+
+### Model Config Resolver
+
+`createModelConfigResolver(globalConfig)` returns `{ resolve(model, key), getMatchedOverrides(model) }`.
+
+- `resolve(model, key)` — returns override value if model matches a pattern, else global default
+- `getMatchedOverrides(model)` — returns full override object if match, else null
+
+First matching pattern wins. Resolver is threaded through:
+- **Rate-limiter TPM enforcer**: dynamic `maxTpm` per model
+- **Rate-limiter RPM enforcer**: per-model cooldown (models with `cooldownMs` override enter independent cooldown)
+- **Scheduler**: per-model `maxConcurrency`, `minDispatchGapMs`, `maxTpm` for gap calculation
+- **NIM client**: per-model `maxRetries`, `retryDelays`
+- **Index.js**: per-model `completionBuffer` in `estimateJobTokens`
+
+### Cooldown Semantics
+
+| Scenario | Behavior | adaptiveLimit |
+|----------|----------|---------------|
+| No override, 429 exhausted | Global cooldown, everything stops | Decremented (floor 5) |
+| Has cooldownMs override | Only that model enters cooldown | NOT decremented |
+| Both active | Model passes only if BOTH expired (AND gate) | N/A |
+
 ## Configuration
 
 All constants configurable via env vars. See README.md for the full list.
