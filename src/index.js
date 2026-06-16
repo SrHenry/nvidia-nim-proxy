@@ -6,6 +6,7 @@ import { createNimClient } from "./infrastructure/nim-client.js";
 import { createRateLimiter } from "./domain/rate-limiter.js";
 import { createTokenTracker } from "./domain/token-tracker.js";
 import { createModelInjector } from "./domain/model-injector.js";
+import { createModelConfigResolver } from "./domain/model-config-resolver.js";
 import { createScheduler } from "./domain/scheduler.js";
 import { registerRoutes } from "./presentation/routes.js";
 import { createServer } from "./presentation/server.js";
@@ -20,7 +21,8 @@ import { maybeMigrateFromJson } from "./infrastructure/database/legacy-migration
 const tokenizer = createTokenizer();
 const authLoader = createAuthLoader(config.authFile, config.provider);
 const modelInjector = createModelInjector(config);
-const rateLimiter = createRateLimiter(config);
+const modelConfigResolver = createModelConfigResolver(config);
+const rateLimiter = createRateLimiter(config, modelConfigResolver);
 const tokenTracker = createTokenTracker(tokenizer, rateLimiter, null);
 
 const db = new Database(config.dbPath);
@@ -39,6 +41,7 @@ if (loadedState) {
   rateLimiter.loadState({
     cooldownUntil: loadedState.cooldownUntil,
     adaptiveLimit: loadedState.adaptiveLimit,
+    modelCooldowns: loadedState.modelCooldowns || {},
   });
 }
 
@@ -150,11 +153,12 @@ async function processJob(job) {
 
     const is429Exhausted = errorMessage.includes("429 exhausted");
     if (is429Exhausted) {
-      rateLimiter.enterCooldown();
+      rateLimiter.enterCooldown(model);
       const state = rateLimiter.getState();
       throttleRepo.setState({
         adaptiveLimit: state.adaptiveLimit,
         cooldownUntil: state.cooldownUntil,
+        modelCooldowns: state.modelCooldowns,
       });
       throttleRepo.saveAllModelStates(rateLimiter.getAllModelStates());
       const summary = tokenTracker.getSummary();
@@ -198,14 +202,15 @@ async function processJob(job) {
   }
 }
 
-const nimClient = createNimClient(config, authLoader, modelInjector, null);
+const nimClient = createNimClient(config, authLoader, modelInjector, null, modelConfigResolver);
 
 function estimateJobTokens(body) {
   if (!body?.messages) return 0;
-  return tokenizer.estimateMessageTokens(body.messages) + config.completionBuffer;
+  const buffer = modelConfigResolver.resolve(body?.model, 'completionBuffer');
+  return tokenizer.estimateMessageTokens(body.messages) + buffer;
 }
 
-const scheduler = createScheduler(config, rateLimiter, processJob, estimateJobTokens, null);
+const scheduler = createScheduler(config, rateLimiter, processJob, estimateJobTokens, null, modelConfigResolver);
 
 const pruneInterval = setInterval(() => {
   const cutoff = Date.now() - config.dbRetentionDays * 86400000;

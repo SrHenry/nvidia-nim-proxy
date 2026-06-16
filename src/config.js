@@ -71,4 +71,5 @@ export default Object.freeze({
       },
     },
   ],
+  models: [],
 });
