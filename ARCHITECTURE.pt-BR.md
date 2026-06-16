@@ -87,7 +87,7 @@ index.js (raiz de composição)
 `dispatchTimestamps[]` rastreia quando as requisições saem do proxy. `MAX_RPM` (padrão 25) por janela de 60 segundos.
 
 ### Camada 2 — Janela de Tokens (TPM, por modelo)
-Cada modelo tem seu próprio `tokenTimestamps[]` em janela deslizante de 60s. `MAX_TPM` (padrão 350K) por modelo por janela. Antes do disparo, o custo estimado (tokens de prompt do `js-tiktoken` + `COMPLETION_BUFFER`) **mais tokens pendentes em voo** é verificado contra o orçamento disponível. Tokens pendentes são subtraídos na conclusão (mínimo 0). Rotas não-inference (`/v1/models`, etc.) pulam a verificação TPM. Composta como porta AND com RPM — ambas devem passar.
+Cada modelo tem seu próprio `tokenTimestamps[]` em janela deslizante de 60s. `MAX_TPM` (padrão 250K) por modelo por janela. Antes do disparo, o custo estimado (tokens de prompt do `js-tiktoken` + `COMPLETION_BUFFER`) **mais tokens pendentes em voo** é verificado contra o orçamento disponível. Tokens pendentes são subtraídos na conclusão (mínimo 0). Rotas não-inference (`/v1/models`, etc.) pulam a verificação TPM. Composta como porta AND com RPM — ambas devem passar.
 
 ### Camada 3 — Limitador de Concorrência
 `MAX_CONCURRENCY` (padrão 2) requisições upstream em andamento no máximo.

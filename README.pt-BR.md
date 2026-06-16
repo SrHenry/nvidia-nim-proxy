@@ -45,7 +45,7 @@ Toda configuração é feita via variáveis de ambiente:
 | `FLUSH_INTERVAL_MS` | `5000` | Intervalo de descarga do buffer write-behind |
 | `FLUSH_BATCH_SIZE` | `100` | Tamanho do lote para descarga do buffer |
 | `MAX_RPM` | `25` | Requisições por minuto alvo (NIM publica 40, mantemos conservador) |
-| `MAX_TPM` | `350000` | Tokens por minuto alvo (limitador proativo, composto com RPM) |
+| `MAX_TPM` | `250000` | Tokens por minuto alvo (limitador proativo, composto com RPM) |
 | `COMPLETION_BUFFER` | `4096` | Overhead estimado de completion adicionado aos tokens de prompt para verificação TPM |
 | `COOLDOWN_MINUTES` | `60` | Minutos de espera após exaustão de retries 429 |
 | `MAX_CONCURRENCY` | `2` | Máximo de requisições upstream em andamento |

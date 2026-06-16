@@ -47,7 +47,7 @@ All configuration is via environment variables:
 | `FLUSH_INTERVAL_MS` | `5000` | Write-behind buffer flush interval |
 | `FLUSH_BATCH_SIZE` | `100` | Write-behind buffer batch size trigger |
 | `MAX_RPM` | `25` | Target requests per minute (NIM publishes 40, we stay conservative) |
-| `MAX_TPM` | `350000` | Target tokens per minute (proactive throttle, composes with RPM) |
+| `MAX_TPM` | `250000` | Target tokens per minute (proactive throttle, composes with RPM) |
 | `COMPLETION_BUFFER` | `4096` | Estimated completion overhead added to prompt tokens for TPM check |
 | `COOLDOWN_MINUTES` | `60` | Minutes to wait after exhausted 429 retries |
 | `MAX_CONCURRENCY` | `2` | Max in-flight upstream requests |

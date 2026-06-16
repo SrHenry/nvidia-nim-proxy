@@ -96,7 +96,7 @@ export function createRpmEnforcer(config) {
 }
 
 export function createTpmEnforcer(config) {
-  const maxTpm = config.maxTpm || 250_000;
+  const maxTpm = config.maxTpm;
   const modelStates = new Map();
 
   function getOrCreateModelState(model) {
