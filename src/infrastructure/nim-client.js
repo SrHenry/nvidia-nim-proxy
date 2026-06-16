@@ -34,8 +34,9 @@ export function createNimClient(config, authLoader, modelInjector, logger, resol
 
     const model = body?.model;
     const maxRetries = Math.max(0, Math.floor(rmc.resolve(model, 'maxRetries')));
-    const retryDelays = Array.isArray(rmc.resolve(model, 'retryDelays'))
-      ? rmc.resolve(model, 'retryDelays')
+    const retryDelaysRaw = rmc.resolve(model, 'retryDelays');
+    const retryDelays = Array.isArray(retryDelaysRaw) && retryDelaysRaw.length > 0
+      ? retryDelaysRaw
       : config.retryDelays;
 
     let lastResponse = null;

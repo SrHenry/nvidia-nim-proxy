@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Database } from '../../../src/infrastructure/database/connection.js';
+import { up as migrateV1 } from '../../../migrations/1781555473000000000-initial-schema.js';
 
 describe('Database connection', () => {
   let dbPath;
@@ -27,7 +28,7 @@ describe('Database connection', () => {
   it('creates a file database and runs migrations', () => {
     dbPath = path.join(os.tmpdir(), `test-${Date.now()}.db`);
     db = new Database(dbPath);
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
 
     const tables = db.connection
       .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -43,18 +44,14 @@ describe('Database connection', () => {
   it('migration is idempotent', () => {
     dbPath = path.join(os.tmpdir(), `test-${Date.now()}.db`);
     db = new Database(dbPath);
-    db.migrate();
-    db.migrate();
-
-    const version = db.connection
-      .prepare('SELECT version FROM _schema_version ORDER BY version DESC')
-      .get();
-    expect(version.version).toBe(1n);
+    db.ensureInfrastructure();
+    migrateV1(db.connection);
+    expect(() => migrateV1(db.connection)).not.toThrow();
   });
 
   it('inserts throttle_state singleton on migration', () => {
     db = new Database(':memory:');
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
 
     const row = db.connection
       .prepare('SELECT adaptive_limit, cooldown_until FROM throttle_state WHERE id = 1')
@@ -67,7 +64,7 @@ describe('Database connection', () => {
 
   it('runs transactions', () => {
     db = new Database(':memory:');
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
 
     const result = db.transaction(() => {
       db.connection
@@ -83,7 +80,7 @@ describe('Database connection', () => {
 
   it('rolls back transaction on error', () => {
     db = new Database(':memory:');
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
     const beforeCount = Number(
       db.connection.prepare('SELECT COUNT(*) as c FROM _schema_version').get().c
     );
@@ -105,7 +102,7 @@ describe('Database connection', () => {
 
   it('inserts batch of records in single statement', () => {
     db = new Database(':memory:');
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
 
     const columns = ['id', 'model', 'total_tokens', 'token_source', 'created_at', 'is_sse', 'prompt_tokens', 'completion_tokens'];
     const data = [
@@ -123,7 +120,7 @@ describe('Database connection', () => {
 
   it('rejects invalid table name in insertBatch', () => {
     db = new Database(':memory:');
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
     expect(() => {
       db.insertBatch('nonexistent', ['id'], [[1n]]);
     }).toThrow('Invalid table name: nonexistent');
@@ -132,7 +129,7 @@ describe('Database connection', () => {
   it('sets WAL mode', () => {
     dbPath = path.join(os.tmpdir(), `test-${Date.now()}.db`);
     db = new Database(dbPath);
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
 
     const journal = db.connection.pragma('journal_mode');
     expect(journal[0].journal_mode).toBe('wal');

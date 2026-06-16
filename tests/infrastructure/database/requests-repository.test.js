@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Database } from '../../../src/infrastructure/database/connection.js';
+import { up as migrateV1 } from '../../../migrations/1781555473000000000-initial-schema.js';
 import { createSnowflakeGenerator } from '../../../src/infrastructure/database/snowflake.js';
 import { RequestsRepository } from '../../../src/infrastructure/database/requests-repository.js';
 
@@ -10,7 +11,7 @@ describe('RequestsRepository', () => {
 
   beforeEach(() => {
     db = new Database(':memory:');
-    db.migrate();
+    db.ensureInfrastructure(); migrateV1(db.connection);
     snowflake = createSnowflakeGenerator({ workerId: 0 });
     repo = new RequestsRepository(db, snowflake);
   });

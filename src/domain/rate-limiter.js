@@ -39,13 +39,13 @@ export function createRpmEnforcer(config, resolveModelConfig) {
     return state.dispatchTimestamps.length;
   }
 
-  function canDispatch(model) {
+  function canDispatch(model = '') {
     if (getCooldownForModel(model) > now()) return false;
     pruneWindows();
     return currentUsage() < state.adaptiveLimit;
   }
 
-  function timeUntilDispatchAllowed(model) {
+  function timeUntilDispatchAllowed(model = '') {
     const cd = getCooldownForModel(model);
     if (cd > now()) return Math.min(cd - now(), 5000);
     pruneWindows();
@@ -64,7 +64,7 @@ export function createRpmEnforcer(config, resolveModelConfig) {
     state.completionTimestamps.push(now());
   }
 
-  function enterCooldown(model) {
+  function enterCooldown(model = '') {
     const overrides = resolve.getMatchedOverrides(model);
     const hasOverride = overrides && 'cooldownMs' in overrides;
     if (hasOverride) {

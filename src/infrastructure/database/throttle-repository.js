@@ -16,7 +16,7 @@ export class ThrottleRepository {
 
     if (!row) {
       this.db.connection
-        .prepare('INSERT OR IGNORE INTO throttle_state (id, adaptive_limit, cooldown_until, updated_at) VALUES (1, 25, 0, ?)')
+        .prepare('INSERT OR IGNORE INTO throttle_state (id, adaptive_limit, cooldown_until, model_cooldowns, updated_at) VALUES (1, 25, 0, \'{}\', ?)')
         .run(Date.now());
       row = this.db.connection
         .prepare('SELECT * FROM throttle_state WHERE id = 1')
