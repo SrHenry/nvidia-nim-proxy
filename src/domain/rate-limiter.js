@@ -124,34 +124,43 @@ export function createTpmEnforcer(config, resolveModelConfig) {
     return Date.now();
   }
 
-  function pruneModelTokens(modelState) {
-    const cutoff = now() - config.windowMs;
+  function getWindowMs(model) {
+    return resolve(model, "tokenWindowMs") ?? config.tpmWindowMs;
+  }
+
+  function getBudget(model) {
+    const maxTpm = resolve(model, "maxTpm") ?? config.maxTpm;
+    const windowMs = getWindowMs(model);
+    return maxTpm * (windowMs / 60_000);
+  }
+
+  function pruneModelTokens(modelState, windowMs) {
+    const cutoff = now() - windowMs;
     modelState.tokenTimestamps = modelState.tokenTimestamps.filter(t => t.ts > cutoff);
   }
 
-  function tokensInWindow(modelState) {
-    pruneModelTokens(modelState);
+  function sumTokens(modelState) {
     return modelState.tokenTimestamps.reduce((sum, t) => sum + t.tokens, 0);
   }
 
   function canDispatchForModel(model, estimatedTokens) {
     if (estimatedTokens <= 0) return true;
     const ms = getOrCreateModelState(model);
-    pruneModelTokens(ms);
-    const maxTpm = resolve(model, "maxTpm");
-    return tokensInWindow(ms) + ms.pendingTokens + estimatedTokens <= maxTpm;
+    const windowMs = getWindowMs(model);
+    pruneModelTokens(ms, windowMs);
+    return sumTokens(ms) + ms.pendingTokens + estimatedTokens <= getBudget(model);
   }
 
   function timeUntilModelAllowed(model, estimatedTokens) {
     if (estimatedTokens <= 0) return 0;
     const ms = getOrCreateModelState(model);
-    pruneModelTokens(ms);
-    const maxTpm = resolve(model, "maxTpm");
-    const available = maxTpm - (tokensInWindow(ms) + ms.pendingTokens);
+    const windowMs = getWindowMs(model);
+    pruneModelTokens(ms, windowMs);
+    const available = getBudget(model) - (sumTokens(ms) + ms.pendingTokens);
     if (estimatedTokens <= available) return 0;
     if (ms.tokenTimestamps.length === 0) return 1000;
     const oldest = ms.tokenTimestamps[0];
-    const wait = oldest.ts + config.windowMs - now();
+    const wait = oldest.ts + windowMs - now();
     return wait > 0 ? wait : 1000;
   }
 
@@ -164,7 +173,7 @@ export function createTpmEnforcer(config, resolveModelConfig) {
   function recordTokenUsage(model, tokens) {
     if (tokens <= 0) return;
     const ms = getOrCreateModelState(model);
-    pruneModelTokens(ms);
+    pruneModelTokens(ms, getWindowMs(model));
     ms.pendingTokens = Math.max(0, ms.pendingTokens - tokens);
     ms.tokenTimestamps.push({ ts: now(), tokens });
   }
@@ -172,14 +181,14 @@ export function createTpmEnforcer(config, resolveModelConfig) {
   function currentTokenUsage(model) {
     const ms = modelStates.get(model);
     if (!ms) return 0;
-    pruneModelTokens(ms);
-    return tokensInWindow(ms);
+    pruneModelTokens(ms, getWindowMs(model));
+    return sumTokens(ms);
   }
 
   function getAllModelStates() {
     const result = {};
     for (const [model, ms] of modelStates) {
-      pruneModelTokens(ms);
+      pruneModelTokens(ms, getWindowMs(model));
       result[model] = {
         tokenTimestamps: ms.tokenTimestamps,
         pendingTokens: ms.pendingTokens,

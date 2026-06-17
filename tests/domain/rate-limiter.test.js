@@ -46,7 +46,7 @@ describe("createTpmEnforcer", () => {
   let tpm;
 
   beforeEach(() => {
-    tpm = createTpmEnforcer({ windowMs: 60_000, maxTpm: 1000 });
+    tpm = createTpmEnforcer({ windowMs: 60_000, tpmWindowMs: 60_000, maxTpm: 1000 });
   });
 
   it("allows dispatch when under limit", () => {
@@ -117,13 +117,13 @@ describe("createTpmEnforcer with per-model maxTpm", () => {
     resolve: (model, key) => {
       if (model === "glm-5.1" && key === "maxTpm") return 500;
       if (model === "mini-max" && key === "maxTpm") return 2000;
-      return 1000;
+      return undefined;
     },
     getMatchedOverrides: () => null,
   };
 
   beforeEach(() => {
-    tpm = createTpmEnforcer({ windowMs: 60_000, maxTpm: 1000 }, resolver);
+    tpm = createTpmEnforcer({ windowMs: 60_000, tpmWindowMs: 60_000, maxTpm: 1000 }, resolver);
   });
 
   it("uses per-model maxTpm when set", () => {
@@ -142,6 +142,34 @@ describe("createTpmEnforcer with per-model maxTpm", () => {
     tpm.recordTokenUsage("glm-5.1", 500);
     const wait = tpm.timeUntilModelAllowed("glm-5.1", 100);
     expect(wait).toBeGreaterThan(0);
+  });
+});
+
+describe("createTpmEnforcer with configurable window", () => {
+  it("scales budget by window size", () => {
+    const tpm = createTpmEnforcer({ windowMs: 60_000, tpmWindowMs: 300_000, maxTpm: 1000 });
+    // 1-min window: budget = 1000
+    // 5-min window: budget = 1000 * (300000/60000) = 5000
+    expect(tpm.canDispatchForModel("m", 4000)).toBe(true);
+    expect(tpm.canDispatchForModel("m", 6000)).toBe(false);
+  });
+
+  it("uses per-model tokenWindowMs override", () => {
+    const resolver = {
+      resolve: (model, key) => {
+        if (model === "short-window" && key === "tokenWindowMs") return 60_000;
+        if (model === "long-window" && key === "tokenWindowMs") return 600_000;
+        return undefined;
+      },
+      getMatchedOverrides: () => null,
+    };
+    const tpm = createTpmEnforcer({ windowMs: 60_000, tpmWindowMs: 300_000, maxTpm: 1000 }, resolver);
+    // short-window: 1 min → budget = 1000
+    // long-window: 10 min → budget = 10000
+    expect(tpm.canDispatchForModel("short-window", 900)).toBe(true);
+    expect(tpm.canDispatchForModel("short-window", 1100)).toBe(false);
+    expect(tpm.canDispatchForModel("long-window", 9000)).toBe(true);
+    expect(tpm.canDispatchForModel("long-window", 11000)).toBe(false);
   });
 });
 
@@ -212,6 +240,7 @@ describe("createRateLimiter (composition)", () => {
   beforeEach(() => {
     limiter = createRateLimiter({
       windowMs: 60_000,
+      tpmWindowMs: 60_000,
       maxRpm: 10,
       maxTpm: 1000,
       cooldownMs: 600_000,
