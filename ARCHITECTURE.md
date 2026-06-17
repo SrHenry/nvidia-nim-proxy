@@ -87,7 +87,7 @@ index.js (composition root)
 `dispatchTimestamps[]` tracks when requests leave the proxy. `MAX_RPM` (default 25) per 60-second window.
 
 ### Layer 2 — Token Window (TPM, per-model)
-Each model gets its own `tokenTimestamps[]` in a 60-second rolling window. `MAX_TPM` (default 250K) per model per window. Before dispatch, estimated cost (prompt tokens from `js-tiktoken` + `COMPLETION_BUFFER`) **plus in-flight pending tokens** is checked against available budget. Pending tokens are subtracted on completion (floor 0, so over-release doesn't create negative pending). Non-inference paths (`/v1/models`, etc.) skip TPM check entirely. Composes as AND gate with RPM — both must pass.
+Each model gets its own `tokenTimestamps[]` in a configurable rolling window (default 5 min via `tpmWindowMs`). `MAX_TPM` (default 250K) is a per-minute rate — actual budget scales with window: `maxTpm * (tokenWindowMs / 60000)`. Before dispatch, estimated cost (prompt tokens from `js-tiktoken` + `COMPLETION_BUFFER`) **plus in-flight pending tokens** is checked against available budget. Pending tokens are subtracted on completion (floor 0, so over-release doesn't create negative pending). Non-inference paths (`/v1/models`, etc.) skip TPM check entirely. Composes as AND gate with RPM — both must pass. Per-model override: `tokenWindowMs`.
 
 ### Layer 3 — Concurrency Limiter
 `MAX_CONCURRENCY` (default 2) in-flight upstream requests max.

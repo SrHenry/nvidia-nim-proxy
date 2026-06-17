@@ -72,7 +72,7 @@ Cinco camadas previnem violações de rate limit:
 
 1. **Janela deslizante (baseada em disparos)** -- Rastreia quando as requisições saem do proxy (não quando completam). `MAX_RPM` requisições por janela de 60 segundos.
 
-2. **Janela de tokens (TPM, por modelo)** -- Cada modelo tem sua própria janela deslizante de 60s. Antes do disparo, o custo estimado (prompt + `COMPLETION_BUFFER`) mais tokens pendentes em voo é verificado contra `MAX_TPM`. Ambas as portas RPM e TPM por modelo devem passar. Rotas não-inference (ex.: `/v1/models`) pulam a verificação TPM. Tokens pendentes são reduzidos na conclusão (mínimo 0).
+2. **Janela de tokens (TPM, por modelo)** -- Cada modelo tem sua própria janela deslizante configurável (padrão 5 min via `tpmWindowMs`). `MAX_TPM` é uma taxa por minuto — o orçamento real escala com a janela: `maxTpm * (tokenWindowMs / 60000)`. Antes do disparo, o custo estimado (prompt + `COMPLETION_BUFFER`) mais tokens pendentes em voo é verificado contra o orçamento. Ambas as portas RPM e TPM por modelo devem passar. Rotas não-inference (ex.: `/v1/models`) pulam a verificação TPM. Tokens pendentes são reduzidos na conclusão (mínimo 0).
 
 3. **Limite de concorrência** -- Máximo de `MAX_CONCURRENCY` requisições upstream em andamento.
 
@@ -100,7 +100,7 @@ models: [
   {
     pattern: /^z-ai\/glm-?5\.?1/i,
     injection: { chat_template_kwargs: { enable_thinking: true } },
-    override: { maxTpm: 250000, cooldownMs: 120000 },
+    override: { maxTpm: 250_000, tokenWindowMs: 300_000 },
   },
   {
     pattern: /^minimaxai\/minimax-m3$/i,
@@ -114,7 +114,7 @@ models: [
 ```
 
 - **`injection`** — patcheia o body antes de enviar upstream
-- **`override`** — params por modelo: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`
+- **`override`** — params por modelo: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`, `tokenWindowMs`
 
 Primeiro padrão correspondente vence.
 

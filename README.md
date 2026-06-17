@@ -74,7 +74,7 @@ Five layers prevent rate limit violations:
 
 1. **Rolling window (dispatch-based)** -- Tracks when requests leave the proxy (not when they complete). `MAX_RPM` requests per 60-second window.
 
-2. **Token window (TPM, per-model)** -- Each model gets its own 60-second rolling token window. Before dispatch, estimated token cost (prompt + `COMPLETION_BUFFER`) plus in-flight pending tokens is checked against `MAX_TPM`. Both RPM and per-model TPM gates must pass. Non-inference paths (e.g. `/v1/models`) skip the TPM check. Pending tokens are reduced on completion (floor 0).
+2. **Token window (TPM, per-model)** -- Each model gets its own configurable rolling token window (default 5 min via `tpmWindowMs`). `MAX_TPM` is a per-minute rate — actual budget scales with window: `maxTpm * (tokenWindowMs / 60000)`. Before dispatch, estimated token cost (prompt + `COMPLETION_BUFFER`) plus in-flight pending tokens is checked against the budget. Both RPM and per-model TPM gates must pass. Non-inference paths (e.g. `/v1/models`) skip the TPM check. Pending tokens are reduced on completion (floor 0).
 
 3. **Concurrency cap** -- Max `MAX_CONCURRENCY` in-flight upstream requests.
 
@@ -102,7 +102,7 @@ models: [
   {
     pattern: /^z-ai\/glm-?5\.?1/i,
     injection: { chat_template_kwargs: { enable_thinking: true } },
-    override: { maxTpm: 250000, cooldownMs: 120000 },
+    override: { maxTpm: 250_000, tokenWindowMs: 300_000 },
   },
   {
     pattern: /^minimaxai\/minimax-m3$/i,
@@ -116,7 +116,7 @@ models: [
 ```
 
 - **`injection`** — patches request body before sending upstream
-- **`override`** — per-model throttle/scheduler params: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`
+- **`override`** — per-model throttle/scheduler params: `maxTpm`, `maxConcurrency`, `completionBuffer`, `cooldownMs`, `minDispatchGapMs`, `maxRetries`, `retryDelays`, `tokenWindowMs`
 
 First matching pattern wins. Resolver threaded through rate-limiter, scheduler, NIM client, and index.js.
 
