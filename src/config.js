@@ -31,6 +31,7 @@ const dbRetentionDays = envNumber("DB_RETENTION_DAYS", 365);
 const snowflakeWorkerId = envNumber("SNOWFLAKE_WORKER_ID", 0);
 const flushIntervalMs = envNumber("FLUSH_INTERVAL_MS", 5000);
 const flushBatchSize = envNumber("FLUSH_BATCH_SIZE", 100);
+const tpmWindowMs = envNumber("TPM_WINDOW_MS", 300_000);
 
 export default Object.freeze({
   port: envNumber("PORT", 4000),
@@ -46,6 +47,7 @@ export default Object.freeze({
   flushIntervalMs,
   flushBatchSize,
   windowMs: 60_000,
+  tpmWindowMs,
   maxRpm,
   maxTpm,
   completionBuffer,
@@ -66,6 +68,7 @@ export default Object.freeze({
       override: {
         maxTpm: 250_000,
         completionBuffer: 15_000,
+        tokenWindowMs: 300_000,
       },
     },
     {
