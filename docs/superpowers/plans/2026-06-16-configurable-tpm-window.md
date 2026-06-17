@@ -45,7 +45,25 @@ windowMs: 60_000,
 tpmWindowMs,
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Update models array example**
+
+Update the GLM-5.1 model entry to include `tokenWindowMs` in override:
+
+```js
+{
+  pattern: /^z-ai\/glm-?5\.?1/i,
+  injection: {
+    chat_template_kwargs: { enable_thinking: true },
+  },
+  override: {
+    maxTpm: 250_000,
+    completionBuffer: 15_000,
+    tokenWindowMs: 300_000,
+  },
+},
+```
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/config.js
